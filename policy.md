@@ -98,7 +98,7 @@ It aims to eliminate ambiguity, reduce supervision needs, and facilitate automat
 
 > **Rationale:** Defines the structure and content required for Product Requirements Documents, ensuring consistent and comprehensive requirement specification.
 
-- **Location Pattern**: `workflow/prd/`
+- **Location Pattern**: `workflow/prd/<project-name>/`
 - **File Naming**: `<PRD-ID>-<SHORT-NAME>.md` (e.g., `1-user-management.md`)
 
 | Section | Description |
@@ -128,7 +128,7 @@ It aims to eliminate ambiguity, reduce supervision needs, and facilitate automat
 
 > **Rationale:** Specifies the structure and content required for task documentation, supporting transparency and reproducibility.
 
-- **Location Pattern**: workflow/tasks/<PRD-ID>/
+- **Location Pattern**: `workflow/tasks/<project-name>/<PRD-ID>/`
 - **File Naming**: `<PRD-ID>-<TASK-ID>-<SHORT-DESCRIPTION>.md` (e.g., `1-1-create-user-table.md` for first task of PRD 1)
 
 | Section | Description |
