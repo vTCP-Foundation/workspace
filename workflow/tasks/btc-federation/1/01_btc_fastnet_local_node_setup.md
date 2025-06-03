@@ -15,6 +15,7 @@ Deploy a local Bitcoin regtest node with fast block generation (~10 seconds) for
 - Miner configured with minimal system load
 - Blocks generated every ~10 seconds
 - Solution named "fastnet"
+- Env setup must be reproducible: same flow each time, same miner keys and address, etc.
 
 ## File System Layout
 - Install Bitcoin Core node in `.btc/node/` directory within project
