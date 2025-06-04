@@ -3,13 +3,18 @@
 ## Document Information
 - **Project Name**: BTC Federation
 - **Phase/Iteration**: Phase 1
-- **Document Version**: 1.0
+- **Document Version**: 1.1
 - **Date**: 2025-06-04
 - **Author(s)**: Dima Chizhevsky
 - **Stakeholders**: Dima Chizhevsky, Mykola Ilashchuk
 - **Status**: Active
 - **Previous PRD**: n/a
-- **Related Documents**: n/a
+- **Related Documents**: 
+  - [Task 2.1: Project Foundation](../../tasks/btc-federation/2/task_2_1_project_foundation.md)
+  - [Task 2.2: Network Host](../../tasks/btc-federation/2/task_2_2_network_host.md)
+  - [Task 2.3: Peer Storage](../../tasks/btc-federation/2/task_2_3_peer_storage.md)
+  - [Task 2.4: Peer Exchange](../../tasks/btc-federation/2/task_2_4_peer_exchange.md)
+  - [Task 2.5: Config Hot-reload](../../tasks/btc-federation/2/task_2_5_config_hotreload.md)
 
 ## Executive Summary
 **Objective**: Implement a basic p2p network node using libp2p that serves as the foundation for the BTC Federation protocol.
@@ -51,7 +56,7 @@ This implementation will use Go and libp2p to create a production-ready network 
 **1. Basic Connectivity**
 - Nodes can connect to each other using libp2p
 - Support for IPv4/IPv6 and DNS resolution
-- QUIC transport protocol implementation
+- **TCP transport protocol implementation** (changed from QUIC for stability and compatibility)
 - Custom protocol: 'vtcp/btc-foundation/v1.0.0'
 
 **2. Persistent Peer Storage**
@@ -123,18 +128,16 @@ node:
 
 network:
   addresses:
-    - "/ip4/0.0.0.0/udp/9000/quic"
-    - "/ip6/::/udp/9000/quic"
+    - "/ip4/0.0.0.0/tcp/9000"    # Updated to TCP transport
+    - "/ip6/::/tcp/9000"         # Updated to TCP transport
 
-    peers:
-        exchange_interval: "30s"
-        connection_timeout: "10s"
+peers:
+  exchange_interval: "30s"
+  connection_timeout: "10s"
 
 logging:
   level: "info"  # debug, info, warn, error
   format: "json"  # json, text
-
-
 ```
 
 #### Peer Storage Schema (`peers.yaml`)
@@ -142,8 +145,8 @@ logging:
 peers:
   - public_key: "<base64-encoded-public-key>"
     addresses:
-      - "/ip4/192.168.1.100/udp/9000/quic"
-      - "/dns4/node1.example.com/udp/9000/quic"
+      - "/ip4/192.168.1.100/tcp/9000"        # Updated to TCP transport
+      - "/dns4/node1.example.com/tcp/9000"   # Updated to TCP transport
 ```
 
 #### Architecture Components
@@ -154,6 +157,23 @@ peers:
 3. **Config Manager**: Configuration loading, validation, and hot-reload
 4. **Protocol Handler**: Custom protocol implementation for peer exchange
 
+#### Transport Protocol Decision
+
+**Critical Change**: The implementation uses **TCP instead of QUIC** as the primary transport protocol.
+
+**Rationale for TCP Selection**:
+- **Stability**: TCP is well-tested and stable in libp2p
+- **Compatibility**: Better compatibility across different network environments  
+- **Simplicity**: Simplified configuration and debugging
+- **Development Velocity**: Faster implementation and testing
+- **Security**: Equivalent security with libp2p's Noise protocol over TCP
+
+**Impact on Requirements**:
+- Connection establishment time remains within 3-second target
+- All other performance and functionality requirements unchanged
+- Enhanced stability and compatibility across diverse network environments
+
+See [ADR-002: Transport Protocol Selection](../../../workspace/architecture/btc-federation/ADR-002-transport-protocol-selection.md) for detailed decision rationale.
 
 #### Data Storage
 - yaml file for peers storage
@@ -365,17 +385,17 @@ Each success criterion requires specific validation approaches:
 
 ### Unit Testing
 - **Coverage Target**: >90%
-- **Focus Areas**: Configuration parsing, peer validation, file operations
+- **Focus Areas**: Configuration parsing, peer validation, file operations, TCP connectivity
 - **Tools**: Go standard testing, testify for assertions
 
 ### Integration Testing
 - Subject of another PRD.
 
 ### Performance Testing
-- **Load Test**: 50 concurrent connections
+- **Load Test**: 50 concurrent TCP connections
 - **Stress Test**: 10-minutes continuous operation
 - **Memory Test**: No memory leaks under load
-- **Latency Test**: Connection establishment time
+- **Latency Test**: TCP connection establishment time
 
 ---
 
@@ -383,9 +403,10 @@ Each success criterion requires specific validation approaches:
 | Version | Date | Author | Changes | Iteration |
 |---------|------|--------|---------|-----------|
 | 1.0 | 2025-06-04 | Dima Chizhevsky | Initial version | Phase 1 |
+| 1.1 | 2025-06-04 | Dima Chizhevsky | Updated transport protocol from QUIC to TCP | Phase 1 |
 
 **Related Documents**
 - **Master Project Vision**: n/a
 - **Previous Iteration PRD**: n/a
-- **Technical Architecture**: generate a ADR with claude.
+- **Technical Architecture**: [ADR-001](../../../workspace/architecture/btc-federation/ADR-001-network-architecture-design.md), [ADR-002](../../../workspace/architecture/btc-federation/ADR-002-transport-protocol-selection.md), [ADR-003](../../../workspace/architecture/btc-federation/ADR-003-interface-design-integration.md)
 - **User Research**: n/a
