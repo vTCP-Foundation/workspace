@@ -50,6 +50,7 @@ Structure your validation feedback as follows:
 - Questions for Clarification
 
 ## Key Focus Areas
+- **AI Agent oriented**: The target audience of the document (as developers) is AI agents, not humans. Keep it in mind during execution plan, test plan and other plans generation and validation.
 - **Scope Definition**: Ensure iteration scope is realistic and well-bounded
 - **Success Metrics**: Verify that success can be measured objectively
 - **Risk Management**: Check that major risks are identified and addressed
