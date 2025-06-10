@@ -92,6 +92,7 @@ It aims to eliminate ambiguity, reduce supervision needs, and facilitate automat
 | `docs/architecture/adr/` | Architecture Decision Records |
 | `workflow/tasks/` | List of active and archived tasks for the project |
 | `workflow/prd/` | Product Requirements Document for the project |
+| `test/` | Test files for the project |
 
 
 # PRD Documentation and Structure
