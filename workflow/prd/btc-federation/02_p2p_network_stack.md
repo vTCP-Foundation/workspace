@@ -63,7 +63,6 @@ This implementation will use Go and libp2p to create a production-ready network 
 - YAML-based peer storage (`peers.yaml`)
 - Atomic file operations with conflict detection
 - Schema validation and error recovery
-- Concurrent access protection
 
 **3. Configuration Management**
 - YAML configuration file (`conf.yaml`)
