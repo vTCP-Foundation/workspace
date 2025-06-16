@@ -95,7 +95,6 @@ This implementation will use Go and libp2p to create a production-ready network 
 - [ ] Peers persist across restarts
 - [ ] Manual edits to peers.yaml are detected and handled
 - [ ] Invalid peers are filtered out and logged
-- [ ] Concurrent access doesn't corrupt data
 - [ ] Backup creation for corrupted files
 
 **Configuration**:
