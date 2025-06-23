@@ -48,6 +48,13 @@ Tasks should be completed in the following order due to dependencies:
 - **Description**: Create comprehensive P2P connection test integrating all enhancements
 - **Key Deliverables**: `test/p2p/p2p_test.go`, end-to-end P2P connection validation
 
+### 03-6: P2P Connection Resilience Testing
+- **File**: [03-6-p2p-connection-resilience-testing.md](./03-6-p2p-connection-resilience-testing.md)
+- **Status**: Completed
+- **Dependencies**: 03-5 (basic P2P connection test)
+- **Description**: Implement network resilience testing with network disruption and recovery validation
+- **Key Deliverables**: `TestP2PConnectionResilience` test, `NetworkConditions` struct, enhanced `ConfigureNetworkConditions` method
+
 ## Success Criteria
 All tasks must be completed successfully for PRD 03 to be considered complete:
 - All enhanced methods work correctly
