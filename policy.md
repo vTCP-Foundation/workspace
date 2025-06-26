@@ -9,7 +9,6 @@ It aims to eliminate ambiguity, reduce supervision needs, and facilitate automat
 > **Rationale:** Sets the context, actors, and compliance requirements for the policy, ensuring all participants understand their roles and responsibilities.
 
 ## Actors
-
 > **Rationale:** Defines who is involved in the process and what their roles are.
 
 - **User**: The individual responsible for defining requirements, prioritising work, approving changes, and ultimately accountable for all code modifications.
@@ -26,6 +25,114 @@ It aims to eliminate ambiguity, reduce supervision needs, and facilitate automat
 - **User Authority and Responsibility**: The User is the sole decider for the scope and design of ALL work. Responsibility for all code changes remains with the User, regardless of whether the AI Agent performed the implementation.
 
 - **Data Sense-Checking**: All data must be sense-checked for consistency and accuracy.
+
+
+## Workflow
+> **Rationale:** Defines stages of work that are expected to be followed by the Actors, with clear step-by-step guidance for Agents
+
+### Feature Development Workflow
+
+#### Phase 1: PRD Planning and Preparation
+1. **PRD Creation**: Create PRD using [Template PRD](/template_prd.md)
+2. **PRD Validation**: Validate PRD with [PRD validation prompt](/prompts/prd_validation_prompt.md)
+3. **PRD Decomposition**: Break down PRD into tasks using [Template Task](/template_task.md)
+4. **Task Complexity Assessment**: Determine validation criteria level for each task (Simple/Moderate/Complex) as per "Task Validation Criteria Proportionality"
+5. **User Approval**: Get explicit User approval for the complete task list and validation criteria before proceeding
+
+#### Phase 2: Individual Task Implementation (Repeat for Each Task)
+
+**Step 1: Pre-Implementation Setup**
+- **Task Selection**: Agent identifies next task from approved task list
+- **Scope Verification**: Confirm task scope aligns with PRD and no scope creep
+- **Branch Creation**: Create or use PRD-dedicated feature branch named `prd/<PRD-ID>-<short-description>`. Before creation check if the branch already exists. If it does, then use that branch
+- **Implementation Plan Review**: Review and confirm implementation approach with User if needed
+
+**Step 2: Core Implementation**
+- **Code Implementation**: Execute task requirements strictly within defined scope
+- **Documentation Updates**: Update any required technical documentation inline with changes
+- **Implementation Documentation**: Document any deviations from planned approach in task file
+
+**Step 3: Demo Creation and Validation**
+> **Critical Gate**: No code commits or test implementation shall proceed until demo is validated
+
+- **Demo Creation**: Agent creates a demonstration that proves the implemented functionality works as expected and covers ALL task requirements
+  - **Demo Purpose**: The demo serves as immediate, tangible proof that implementation meets requirements before investing time in formal testing
+  - **Demo Types**: Choose appropriate format based on task complexity:
+    - Simple tasks: Basic script or command demonstration
+    - Moderate tasks: Interactive demonstration or test harness
+    - Complex tasks: Comprehensive walkthrough covering all integration points
+  - **Demo Scope**: Must demonstrate ALL requirements and DOD criteria listed in task
+  - **Demo Documentation**: Include clear instructions for User to reproduce demo results
+
+- **User Demo Validation**: User reviews and approves demo
+  - **Validation Criteria**: Demo must prove all task requirements are met
+  - **Failure Protocol**: If demo fails, Agent must fix implementation before proceeding
+  - **Scope Validation**: Confirm no scope creep occurred during implementation
+
+**Step 4: Test Implementation**
+- **Test Development**: Implement automated tests according to task's test plan
+- **Test Scope**: Tests must align with task complexity level and validation criteria
+- **Test Coverage**: Ensure tests cover all functionality demonstrated in the demo
+- **Test Documentation**: Update test documentation and ensure tests are properly integrated
+
+**Step 5: Final Validation and Integration**
+- **User Test Validation**: User reviews and approves implemented tests
+- **Validation Criteria Check**: Confirm all proportional validation criteria are met
+- **ADR Synchronization**: Update Architecture Decision Records if implementation required architectural decisions
+- **Final Documentation**: Complete any remaining documentation updates
+
+**Step 6: Version Control Integration**
+- **Commit Creation**: Create commits with proper format `[<PRD-ID>-<TASK-ID>] <description>`
+- **Pull Request Decision**: 
+  - If current task is the last task in the PRD: Create PR with PRD linkage and implementation summary for all tasks
+  - If current task is NOT the last task in the PRD: Only create commit (no PR)
+- **User PR Review**: User approves pull request (only if PR was created)
+- **Merge to Main**: Complete merge using squash merge strategy (only if PR was created)
+
+### Testing-Focused Development Workflow
+
+#### For Dedicated Testing Tasks (Unit/Integration/E2E Test Development)
+
+**Modified Phase 2 for Testing Tasks:**
+
+**Step 1-2**: Same as Feature Development (Pre-Implementation Setup and Core Implementation)
+
+**Step 3: Test Demonstration**
+- **Test Execution Demo**: Run implemented tests to demonstrate they work correctly
+- **Test Coverage Demo**: Show what functionality/scenarios the tests cover
+- **Test Results Demo**: Demonstrate that tests can detect both success and failure scenarios
+- **Integration Demo**: Show how tests integrate with existing test infrastructure
+
+**Step 4**: Skip separate test implementation (tests ARE the implementation)
+
+**Step 5-6**: Same as Feature Development (Final Validation and Integration)
+
+#### Demo Importance and Timing Rationale
+
+> **Why Demos are Critical Before Commits/Tests:**
+
+1. **Early Validation**: Demos provide immediate feedback on whether implementation meets requirements before time is invested in formal testing
+2. **Scope Control**: Demos help identify scope creep early in the process when it's easier to correct
+3. **User Confidence**: Users can see tangible progress and provide course corrections before work is "locked in" through commits
+4. **Quality Gate**: Demos ensure functionality actually works in practice, not just in theory
+5. **Documentation Verification**: Demos prove that implementation matches documented requirements
+6. **Risk Mitigation**: Catching implementation issues at demo stage prevents cascading problems in tests and downstream work
+
+#### Workflow Error Handling
+
+**Scope Creep Detection:**
+- Agent must immediately stop work and notify User if scope exceeds task boundaries
+- All scope conflicts resolved through explicit User decision and task document updates
+
+**Blocker Management:**
+- Agent must identify and report blockers immediately
+- Work stops until blockers are resolved through User intervention
+
+**Validation Failures:**
+- Demo validation failure: Return to Step 2 (Core Implementation)
+- Test validation failure: Return to Step 4 (Test Implementation)
+- Maximum 3 iteration cycles before escalating to User for guidance
+
 
 ## Task-Driven Development
 - **Task-Driven Development**: No code shall be created or changed unless there is a task explicitly authorizing that change.
@@ -87,12 +194,11 @@ It aims to eliminate ambiguity, reduce supervision needs, and facilitate automat
 
 | Directory | Description |
 |-----------|-------------|
-| `docs/` | General case and entry point documentation for the project. |
-| `docs/architecture/` | Architecture documentation |
-| `docs/architecture/adr/` | Architecture Decision Records |
-| `workflow/tasks/` | List of active and archived tasks for the project |
-| `workflow/prd/` | Product Requirements Document for the project |
-| `test/` | Test files for the project |
+| `architecture/<project-name>/` | Architecture Decision Records for a specific project. |
+| `docs/` | General, project-agnostic documentation. |
+| `workflow/prd/<project-name>/` | Product Requirements Documents for a specific project. |
+| `workflow/tasks/<project-name>/` | Task definitions for a specific project. |
+| `test/` | Test files for the project (Unit, Integration, E2E). |
 
 
 # PRD Documentation and Structure
@@ -239,8 +345,9 @@ It aims to eliminate ambiguity, reduce supervision needs, and facilitate automat
 ## Branching Strategy
 
 - **Main Branch**: `main` branch contains production-ready code
-- **Feature Branches**: Each task must be implemented in a dedicated feature branch named `task/<PRD-ID>-<TASK-ID>-<short-description>`
-- **Branch Lifecycle**: Feature branches are created from `main` and merged back via pull request after task completion
+- **PRD Feature Branches**: Each PRD must be implemented in a dedicated feature branch named `prd/<PRD-ID>-<short-description>`
+- **Task Implementation**: Each task within a PRD is implemented as a commit in the PRD's feature branch
+- **Branch Lifecycle**: PRD feature branches are created from `main` and merged back via pull request after all PRD tasks are completed
 
 ## Commit Standards
 
@@ -250,14 +357,15 @@ It aims to eliminate ambiguity, reduce supervision needs, and facilitate automat
 
 ## Pull Request Requirements
 
-- **PR Title**: Must include task ID and clear description of changes
-- **PR Description**: Must link to task document and summarize implementation approach
+- **PR Title**: Must include PRD ID and clear description of all changes
+- **PR Description**: Must link to PRD document and summarize implementation approach for all tasks
 - **Review Process**: All PRs require User approval before merging
 - **Merge Strategy**: Use squash merge to maintain clean history on main branch
 
 ## Change Tracking
 
-- **Task Linkage**: All commits and PRs must be linked to their originating task
+- **Task Linkage**: All commits must be linked to their originating task
+- **PRD Linkage**: All PRs must be linked to their originating PRD
 - **Documentation Updates**: Any changes affecting documentation must update relevant docs in the same PR
 - **Rollback Procedures**: All changes must be reversible through standard git operations
 
