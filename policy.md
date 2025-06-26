@@ -44,7 +44,7 @@ It aims to eliminate ambiguity, reduce supervision needs, and facilitate automat
 **Step 1: Pre-Implementation Setup**
 - **Task Selection**: Agent identifies next task from approved task list
 - **Scope Verification**: Confirm task scope aligns with PRD and no scope creep
-- **Branch Creation**: Create feature branch using branching strategy defined below. Before creation check if the branch already exists. If it does, then use that branch
+- **Branch Creation**: Create or use PRD-dedicated feature branch named `prd/<PRD-ID>-<short-description>`. Before creation check if the branch already exists. If it does, then use that branch
 - **Implementation Plan Review**: Review and confirm implementation approach with User if needed
 
 **Step 2: Core Implementation**
@@ -84,7 +84,7 @@ It aims to eliminate ambiguity, reduce supervision needs, and facilitate automat
 **Step 6: Version Control Integration**
 - **Commit Creation**: Create commits with proper format `[<PRD-ID>-<TASK-ID>] <description>`
 - **Pull Request Decision**: 
-  - If current task is the last task in the PRD: Create PR with task linkage and implementation summary
+  - If current task is the last task in the PRD: Create PR with PRD linkage and implementation summary for all tasks
   - If current task is NOT the last task in the PRD: Only create commit (no PR)
 - **User PR Review**: User approves pull request (only if PR was created)
 - **Merge to Main**: Complete merge using squash merge strategy (only if PR was created)
@@ -345,8 +345,9 @@ It aims to eliminate ambiguity, reduce supervision needs, and facilitate automat
 ## Branching Strategy
 
 - **Main Branch**: `main` branch contains production-ready code
-- **Feature Branches**: Each task must be implemented in a dedicated feature branch named `task/<PRD-ID>-<TASK-ID>-<short-description>`
-- **Branch Lifecycle**: Feature branches are created from `main` and merged back via pull request after task completion
+- **PRD Feature Branches**: Each PRD must be implemented in a dedicated feature branch named `prd/<PRD-ID>-<short-description>`
+- **Task Implementation**: Each task within a PRD is implemented as a commit in the PRD's feature branch
+- **Branch Lifecycle**: PRD feature branches are created from `main` and merged back via pull request after all PRD tasks are completed
 
 ## Commit Standards
 
@@ -356,14 +357,15 @@ It aims to eliminate ambiguity, reduce supervision needs, and facilitate automat
 
 ## Pull Request Requirements
 
-- **PR Title**: Must include task ID and clear description of changes
-- **PR Description**: Must link to task document and summarize implementation approach
+- **PR Title**: Must include PRD ID and clear description of all changes
+- **PR Description**: Must link to PRD document and summarize implementation approach for all tasks
 - **Review Process**: All PRs require User approval before merging
 - **Merge Strategy**: Use squash merge to maintain clean history on main branch
 
 ## Change Tracking
 
-- **Task Linkage**: All commits and PRs must be linked to their originating task
+- **Task Linkage**: All commits must be linked to their originating task
+- **PRD Linkage**: All PRs must be linked to their originating PRD
 - **Documentation Updates**: Any changes affecting documentation must update relevant docs in the same PR
 - **Rollback Procedures**: All changes must be reversible through standard git operations
 
