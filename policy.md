@@ -44,7 +44,7 @@ It aims to eliminate ambiguity, reduce supervision needs, and facilitate automat
 **Step 1: Pre-Implementation Setup**
 - **Task Selection**: Agent identifies next task from approved task list
 - **Scope Verification**: Confirm task scope aligns with PRD and no scope creep
-- **Branch Creation**: Create feature branch using branching strategy defined below
+- **Branch Creation**: Create feature branch using branching strategy defined below. Before creation check if the branch already exists. If it does, then use that branch
 - **Implementation Plan Review**: Review and confirm implementation approach with User if needed
 
 **Step 2: Core Implementation**
@@ -83,9 +83,11 @@ It aims to eliminate ambiguity, reduce supervision needs, and facilitate automat
 
 **Step 6: Version Control Integration**
 - **Commit Creation**: Create commits with proper format `[<PRD-ID>-<TASK-ID>] <description>`
-- **Pull Request Creation**: Create PR with task linkage and implementation summary
-- **User PR Review**: User approves pull request
-- **Merge to Main**: Complete merge using squash merge strategy
+- **Pull Request Decision**: 
+  - If current task is the last task in the PRD: Create PR with task linkage and implementation summary
+  - If current task is NOT the last task in the PRD: Only create commit (no PR)
+- **User PR Review**: User approves pull request (only if PR was created)
+- **Merge to Main**: Complete merge using squash merge strategy (only if PR was created)
 
 ### Testing-Focused Development Workflow
 
