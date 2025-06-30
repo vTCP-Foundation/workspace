@@ -29,7 +29,7 @@ The Federation audits every Hub under its supervision according to the following
 3.  **Event-Based Audit:** An audit can be triggered by risk flags, as described in the main protocol document.
 
 ### Step 2: Merkle Root Submission
-- Upon receiving an audit request, the Hub must construct a **Merkle tree** of all its active settlement channel states.
+- Upon receiving an audit request, the Hub must construct a **Merkle tree** of all its active [settlement line](/architecture/common/entities/vtcp_settlement_line.md) states.
 - Each leaf in the tree represents a single channel and is a hash of the following data: `hash(channel_id + user_id + hub_id + user_balance + hub_balance + nonce)`.
 - The Hub submits the final **Merkle root** to the Federation. This root is a cryptographic commitment to the Hub's total liabilities at that specific moment.
 
