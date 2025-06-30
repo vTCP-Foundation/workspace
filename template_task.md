@@ -2,6 +2,8 @@
 
 # Links
 - [PRD](<PRD-LINK>)
+- [Previous task 1](<PREVIOUS-TASK-LINK>)
+- [Previous task 2](<PREVIOUS-TASK-LINK>)
 
 # Description
 <Short description of the task>
@@ -43,4 +45,4 @@
 <Compliance validation>
 
 # Restrictions
-- make commits only after successfully executing the demo (if it is in the task) or after successfully passing the tests (if they are provided for by the task)
+- Commit changes only after successfully executing the demo (if it is in the task) or after successfully passing the tests (if they are provided for by the task)
