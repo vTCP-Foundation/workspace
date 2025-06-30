@@ -1,6 +1,6 @@
 # BTC ⟷ vTCP Custody Protocol
 
-_Mykola Ilaschuk, Dima Chizhevsky, Gemini 2.5 Pro, Claude 4 Sonnet_
+_Mykola Ilaschuk, Dima Chizhevsky, 🤖 Gemini 2.5 Pro, 🤖 Claude 4 Sonnet_
 <br>
 _v0.1, 2025-06-30_
 <br>
@@ -11,28 +11,45 @@ This protocol enables the issuance, exchange, and redemption of **BTC-backed** v
 
 ## Core Requirements
 
-### BTC Backing
-- All issued vTCP tokens are secured by verifiably locked BTC on L1
-- Locked BTC remains inaccessible for other uses via script constraints
-- Locked BTC can be redeemed at any time through the protocol
+These requirements define the absolute, non-negotiable functions and security guarantees of the protocol.
 
-### Value Transfer
-- Enables trust-minimized value transfer from L1 to L2. The protocol's security relies on a trust-minimized model where users must trust that a qualified majority (M-of-N) of Federation members will behave honestly.
-- Ensures atomic operations and state synchronization between networks
-      
-### Issuance Control
-- vTCP token issuance requires verified BTC locking on L1
-- Maintains strict 1:1 relationship between L1 locks and vTCP tokens
-- Prevents unauthorized vTCP token creation (strict L2 emission control)
-- Guarantees that L2 funds can be safely and in a trust-minimized manner redeemed on L1
+### Functional Requirements
+
+- **1. Representative Token Issuance:** The system shall enable users to lock a native asset on a Base Chain to mint an equivalent (1:1) amount of a representative token on a Token Chain.
+- **2. Representative Token Redemption:** The system shall enable users to burn representative tokens to redeem an equivalent (1:1) amount of the native asset on the Base Chain. This must be supported via:
+    - A **Cooperative Redemption** process for efficient, mutually-agreed-upon withdrawals.
+    - A **Non-Cooperative Redemption** process for users to unilaterally reclaim their assets if a counterparty is unresponsive or malicious.
+- **3. User State Protection:** The system must maintain a secure, real-time backup of the latest agreed-upon channel states, ensuring the funds of an offline user can be correctly identified and recovered.
+
+### Security Requirements
+
+- **1. Collateral Security:** All native assets locked on the Base Chain must be held in a manner that makes them cryptographically immune to unauthorized seizure, requiring authorization from the protocol's defined consensus mechanism.
+- **2. State Integrity and Authenticity:** The system must ensure that the most recent, validly co-signed channel state is always treated as authoritative, preventing the use of outdated states to defraud participants.
+- **3. Attack Resistance:** The protocol must be immune to replay attacks and incorporate economic or reputation-based deterrents against resource-exhaustion ("griefing") attacks.
+- **4. Explicit Minimized Trust Assumptions & Transparency:** The protocol's security shall operate on a trust-minimized model, explicitly defined by an M-of-N validator set. It assumes that a qualified majority (M) of the N validators are honest and will not collude. To enforce this, all critical protocol actions and their cryptographic proofs must be transparent and publicly auditable.
+
+## Supervisory and Liquidity Functions
+
+Beyond the core issuance and redemption flows, the protocol incorporates advanced functions for system-wide integrity and operational efficiency.
+
+- **1. State Channel Rebalancing:** The protocol shall provide a mechanism for liquidity providers (Hubs) to rebalance funds across multiple state channels. This process optimizes liquidity allocation without requiring on-chain transactions on the Base Chain, and it must require the verifiable, cryptographic consent of all affected users.
+
+- **2. Verifiable Collateral Audits:** The system shall perform regular, automated audits to cryptographically prove that the total supply of the representative token does not exceed the total amount of locked native asset collateral. The audit mechanism must be structured to allow any third party, including individual users, to independently verify the integrity of the system's liabilities.
+
+## Actors
+- [BTC Federation](/architecture/common/entities/btc_federation.md)
+- The Hub - [vTCP Hub](/architecture/common/entities/vtcp_network_hub.md)
+- The User - [vTCP Node](/architecture/common/entities/vtcp_network_node.md)
 
 ## System Prerequisites
 
 ### Hub Security Bond
 Hubs are required to lock a significant amount of their own capital as a security bond. This stake serves as an economic disincentive against malicious behavior. In the event of proven fraud or operational failure leading to a financial shortfall (such as a Hub Stake Overflow), this bond is automatically forfeited ("slashed") to cover the losses.
 
+**Collateralization Rule:** The Hub's bonded collateral **MUST** always be **at least equal** to the aggregate BTC value backing all outstanding vTCP tokens it has issued (a strict **1:1 ratio** between total user deposits and the Hub's stake). If the bonded balance ever drops below this threshold, the Hub is automatically suspended from opening new channels, rebalancing existing channels, or issuing additional vTCP until the deficiency is remedied.
+
 ### Federation State Backup
-The Federation is mandated to act as a real-time backup service for channel states. Hubs must periodically push the latest co-signed state for every channel to the Federation, independent of any specific flow. This "heartbeat" mechanism ensures the Federation always has a recent, valid state on record to use for adjudication, providing critical protection for users, especially those who may be offline.
+The Federation is mandated to act as a real-time backup service for channel states. Node are expected to periodically push the latest co-signed state for every channel to the Federation (as part of paid subscription), independent of any specific flow. This "heartbeat" mechanism ensures the Federation always has a recent, valid state on record to use for adjudication, providing critical protection for users, especially those who may be offline.
 
 ## Protocol Flows
 
@@ -288,9 +305,3 @@ This category involves multiple parties colluding to undermine the system.
 - **Mitigation:**
     - **Decentralization and M-of-N Trust Model:** The fundamental security of the entire system rests on the assumption that a qualified majority (M) of the N Federation members are honest. The primary mitigation is ensuring that the N members are operated by distinct, non-colluding entities in different legal and geographical jurisdictions.
     - **Radical Transparency and Public Auditing:** All Federation decisions (issuance approvals, dispute resolutions) and the evidence used (L1 transaction IDs, signed reconciliations) must be published to a public, immutable log. This allows independent, third-party auditors to continuously verify that the Federation is adhering to the protocol rules. If a colluding majority approves an issuance without a corresponding L1 deposit, the fraud will be immediately visible in the public record.
-
-## Technical Notes
-
-- The protocol continues iteratively until User and Hub attest to the latest channel state for Federation verification
-- All operations maintain strict cryptographic verification requirements
-
