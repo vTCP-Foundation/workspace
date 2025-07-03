@@ -56,7 +56,7 @@ The Federation is mandated to act as a real-time backup service for channel stat
 ### Flow 1: Issuance Process
 
 #### Overview
-This flow enables a user to lock BTC on L1 and receive an equivalent amount of vTCP tokens on L2. The process is designed to be secure, flexible, and resilient. For a detailed technical specification, see the [Issuance Protocol Implementation Details](./BTC%20<->%20vTCP%20Custody%20Protocol%20-%20deposit.md).
+This flow enables a user to lock BTC on L1 and receive an equivalent amount of vTCP tokens on L2. The process covers both the creation of new settlement lines and the topping-up of existing ones, and is designed to be secure, flexible, and resilient. For a detailed technical specification, see the [Issuance Protocol Implementation Details](./BTC%20<->%20vTCP%20Custody%20Protocol%20-%20deposit.md).
 
 #### Actors
 - **User**: Initiates the deposit. Must have a registered `vID` for L2 communication.
@@ -67,7 +67,7 @@ This flow enables a user to lock BTC on L1 and receive an equivalent amount of v
 
 **Step 1: Deposit Request**
 - The User submits a signed `DepositRequest` to the Federation. This request includes their stable `vID` (for L2 routing) and is signed with the key of the L1 wallet they intend to deposit from, proving ownership of the funds for this specific transaction.
-- The Federation validates the request, ensuring the `vID` is registered and the signature is valid. It then computes a unique `request_id` for tracking.
+- The Federation validates the cryptographic signature on the request and computes a unique `request_id` for tracking. It treats the `vID` as an opaque identifier, forwarding it to the Hub. The Hub is responsible for validating the `vID` and establishing a connection with the user.
 
 **Step 2: Authorization and Discovery**
 - The Federation publishes a `DepositAuthorization` to a public location (e.g., the Federation Chain). This message contains the `request_id`, the user's `vID`, and the unique L1 multisig address for the deposit.
@@ -88,12 +88,13 @@ This flow enables a user to lock BTC on L1 and receive an equivalent amount of v
 **Step 6: Handling Failures**
 - **L2 Channel Fails:** If the channel isn't established, the authorization expires. No funds move, no fault is assigned.
 - **User Abandons:** If the channel is made but the user never deposits, the Hub can submit the initial zero-balance reconciliation to the Federation to prove it fulfilled its part, which may affect the user's reputation.
-- **Hub Fails:** If the user deposits but the Hub fails to issue tokens, the user can open a dispute with the Federation, using the L1 transaction hash as proof.
+- **Hub Fails to Issue Tokens:** If the user deposits but the Hub fails to issue tokens, the user can initiate the **Deposit Reversal Flow**. They submit a request to the Federation, which opens a challenge window. If the Hub cannot provide proof of issuance within this window, the Federation returns the L1 funds directly to the user.
+- **Incorrect Deposit Amount:** If the user deposits an amount different from what was authorized, the Federation will not confirm the deposit. The process halts, and the user must initiate a separate, non-disputable refund process to reclaim their funds (less transaction fees).
 
 ### Flow 2: Cooperative Redemption
 
 #### Overview
-This flow enables a User to cooperatively redeem their vTCP tokens for an equivalent amount of BTC on L1. The process is designed to be fast and efficient, relying on a joint, cryptographically-signed agreement between the User and the Hub. This mutual consent eliminates the need for lengthy objection windows and ensures the Federation can act on the request with confidence.
+This flow enables a User to cooperatively redeem their vTCP tokens for an equivalent amount of BTC on L1. The process is designed to be fast and efficient. While the Federation treats every redemption request with the same level of security by default (initiating a challenge window), a cooperative redemption uses an "accelerate" mechanism where mutual consent from the User and Hub allows this window to be bypassed, ensuring a rapid settlement.
 
 #### Actors
 - [BTC Federation](/architecture/common/entities/btc_federation.md) - Manages the custody protocol and L1 funds.
@@ -104,22 +105,20 @@ This flow enables a User to cooperatively redeem their vTCP tokens for an equiva
 
 **Step 1: Redemption Agreement & State Reconciliation**
 - The User signals their intent to redeem a specific amount of vTCP tokens to the Hub.
-- The User and Hub collaborate to create and co-sign a new [channel reconciliation](/architecture/common/entities/vtcp_channel_reconciliation.md). This reconciliation reflects the new channel state *after* the redemption amount has been deducted from the User's balance and effectively transferred to the Hub's side of the channel on L2.
-- *(Security: This co-signed state is the definitive, non-repudiable proof of the agreement. It prevents either party from later disputing the amount.)*
+- The User and Hub collaborate to create and co-sign a new [channel reconciliation](/architecture/common/entities/vtcp_channel_reconciliation.md). This reconciliation reflects the new channel state *after* the redemption amount has been deducted from the User's balance.
+- *(Security: This co-signed state is the definitive, non-repudiable proof of the agreement.)*
 
-**Step 2: Joint Withdrawal Request**
+**Step 2: User Submits Redemption Request**
 - The User submits the co-signed channel reconciliation to the Federation, along with their desired L1 BTC destination address.
-- As part of the same request, the Hub must provide a confirmation signature, attesting to the validity of the redemption.
-- *(Efficiency: This joint submission provides the Federation with immediate proof of consent from both parties, making the cooperative process significantly faster.)*
+- The Federation validates the request and, by default, opens a challenge window to allow the Hub to contest it.
 
-**Step 3: Federation Verification**
-- The Federation receives the joint request and performs the following critical checks:
-  1. Verifies the signatures from both the User and the Hub on the channel reconciliation.
-  2. **Checks the reconciliation's sequence number. It MUST be strictly greater than the sequence number of the state currently on record for that channel. If not, the request is rejected.**
-  3. Compares the submitted reconciliation with its own internal record of the channel's state to ensure it is current and the user has sufficient funds.
-- If any verification fails, the Federation rejects the request and notifies both parties.
+**Step 3: Hub Accelerates the Redemption**
+- The Hub, having already agreed to the redemption, immediately submits the **exact same co-signed reconciliation** to the Federation.
+- *(Efficiency: The Federation interprets the submission of an identical state from both parties as explicit, real-time consent. This action "accelerates" the process.)*
 
-**Step 4: L1 Fund Release & L2 State Update**
+**Step 4: Federation Verification and Settlement**
+- Upon receiving the matching state from the Hub, the Federation bypasses the remainder of the challenge window.
+- It performs final verification on the state (e.g., sequence number, signatures).
 - Upon successful verification, the Federation proceeds with two atomic actions:
   1. **L1 Transaction:** It unlocks the specified amount of BTC from its custody and broadcasts the transaction to the User's L1 address.
   2. **L2 Update:** It updates its internal registry to reflect the new, post-redemption state of the [vTCP settlement line](/architecture/common/entities/vtcp_settlement_line.md).
