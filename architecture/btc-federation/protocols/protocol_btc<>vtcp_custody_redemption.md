@@ -254,8 +254,12 @@ The counterparty is expected to be monitoring the Federation. During the challen
 - **Outcome**: The Federation's validation of the "effective state" will fail. It rejects the request immediately.
 
 ### 7.2. Case 2: Party Submits Outdated State
-- **Scenario**: A party initiates a redemption with an old state, and the counterparty successfully contests it with a newer one.
+- **Scenario**: A party submits a `RedemptionRequest` with an old state, and the counterparty successfully contests it with a newer one.
 - **Outcome**: The Federation will adjudicate in favor of the counterparty. The channel will be liquidated based on the newer state. The party that submitted the outdated state may be penalized.
+
+### 7.4. Case 4: Duplicate Redemption Request
+- **Scenario**: A party submits a `RedemptionRequest` with a `(channel_id, sequence_number)` tuple that has already been processed and adjudicated.
+- **Outcome**: The Federation MUST persist the `(channel_id, sequence_number)` tuple for every successfully processed and adjudicated `RedemptionRequest`. Any subsequent `RedemptionRequest` with an identical `(channel_id, sequence_number)` tuple MUST be rejected with a deterministic error indicating a duplicate request. This prevents replay attacks and ensures the uniqueness of each redemption authorization.
 
 ### 7.3. Case 3: Federation L1 Transaction Fails
 - **Scenario**: The Federation's L1 redemption transaction fails to broadcast or confirm.

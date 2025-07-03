@@ -43,12 +43,37 @@ A malicious user may attempt to defraud the Hub or disrupt the network.
     - **Hub Challenge Window (Flow 3, Step 3):** The Hub is given a mandatory window to contest the user's claim by providing its own channel state. The state with the highest sequence number always wins.
     - **Window Refresh Logic (Flow 3, Step 3 Security Note):** If the Hub successfully contests the claim, the challenge window is reset and restarted. This prevents the user from waiting until the last second to submit their outdated state, giving the Hub no time to react.
 
-**1.2. Issuance Griefing Attack**
+**1.2. Reversal Fraud (L2/L1 Double Spend)**
+- **Attack:** A malicious user attempts to receive L2 funds from the Hub and then fraudulently reclaim their original L1 deposit, effectively stealing from the Hub.
+    1. The user completes the deposit, the Hub issues the L2 funds, and the user receives them.
+    2. Before the Hub can submit the final `ConfirmL2Issuance` proof to the Federation, the user initiates a `RequestDepositReversal`.
+    3. Because the deposit is not yet marked as "settled," the Federation accepts the reversal request and opens the challenge window.
+    4. If the Hub fails to contest within this window, the Federation returns the L1 funds to the user, who has now successfully claimed both L1 and L2 funds.
+- **Mitigation:**
+    - **Hub Liveness Requirement:** This attack is fundamentally a race condition. The protocol's primary defense is the Hub's ability to contest the fraudulent reversal. This imposes a strict liveness requirement on the Hub, which must monitor for reversal requests and respond immediately with the `ContestDepositReversal` call, providing the co-signed `ChannelReconciliation` as proof of L2 issuance.
+    - **Extended Challenge Window:** The `DEPOSIT_REVERSAL_CHALLENGE_PERIOD_SECONDS` is set to 72 hours. This period is intentionally long and aligned with the standard redemption window. The rationale is that Hubs are heavily invested, professional entities. A failure to issue L2 funds is considered a less likely fault scenario than a user attempting to redeem. This extended window gives a Hub ample time to recover from any temporary outage and contest a fraudulent reversal, prioritizing the Hub's security against this form of theft. At the same time, it provides a reliable, albeit slow, recovery path for users in the case of a genuinely failed Hub.
+    - **Proactive L2 Issuance Confirmation:** The most critical defense for the Hub is to call `ConfirmL2Issuance` immediately after the L2 funds are issued and co-signed. This action marks the deposit as "settled" and permanently prevents any future reversal attempts for that `deposit_id`.
+
+**1.3. Issuance Griefing Attack**
 - **Attack:** A user repeatedly initiates the issuance process (Flow 1, Steps 1-2) but intentionally abandons it before depositing BTC. This forces the Hub to expend resources (opening L2 channels, reserving capital) for no reason.
 - **Mitigation:**
     - **One Active Deposit Limit:** The protocol strictly enforces that a user can only have one active deposit request at a time (see Protocol Constants).
     - **Reputation System (Flow 1, Step 5):** If a user abandons a deposit after the L2 channel is established, the Hub can submit the co-signed, zero-balance initial reconciliation. This serves as cryptographic proof of the user's failure to complete the process, leading to a reputation penalty.
     - **Economic Deterrents (Proposed):** For users with low reputation scores or for high-value issuance requests, the Federation could require a small, refundable BTC bond to initiate the process. The bond is forfeited if the user abandons the deposit, creating a direct economic disincentive for griefing.
+
+**1.4. ECDSA Signature Malleability**
+- **Attack:** Without enforcing canonical low-S form or Schnorr-style deterministic signatures, an attacker can produce many valid signatures for the exact same payload. This could lead to multiple `deposit_id` hashes pointing to the same L1 transaction, complicating audits, or bypassing simple replay defenses that key only on the signature bytes.
+- **Mitigation:**
+    - **Canonical Signatures:** As specified in [protocol_btc<>vtcp_custody_deposit.md#hashing-and-signing-algorithm](/architecture/btc-federation/protocols/protocol_btc<>vtcp_custody_deposit.md#hashing-and-signing-algorithm), user signatures for `DepositRequest` MUST be in canonical low-S form and DER-encoded. This ensures a unique signature representation for each valid payload, preventing malleability.
+    - **Consider BIP-340 Schnorr:** For future enhancements, consider adopting BIP-340 Schnorr signatures for users, which inherently avoids malleability and allows for clean public key recovery.
+
+**1.5. DoS via Request Flooding**
+- **Attack:** An external actor can spam thousands of bogus `DepositRequests` (e.g., with invalid signatures or malformed data), consuming Federation resources (CPU for signature checks, network bandwidth, storage for logging) and potentially disrupting legitimate service.
+- **Mitigation:**
+    - **Lightweight Pre-filters:** Implement a multi-layered pre-filtering mechanism before expensive cryptographic operations (hashing, signature verification).
+        - **Rate-Limiting:** Apply rate-limiting per IP address or per `vID` (after initial parsing) to restrict the number of requests within a given time window.
+        - **Proof-of-Work (PoW):** Introduce a client-side Proof-of-Work challenge for `DepositRequest` submissions. The complexity of the PoW can be dynamically adjusted, potentially increasing for IP addresses or IP zones identified as sources of excessive or invalid requests. This imposes a computational cost on attackers, making large-scale spamming economically unfeasible.
+    - **Early Rejection of Malformed Protobufs:** Implement strict and fast validation of incoming message formats. Malformed protobufs or requests that fail basic structural checks should be rejected immediately, without proceeding to more resource-intensive steps like hashing or signature verification.
 
 ---
 

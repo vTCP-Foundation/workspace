@@ -17,3 +17,16 @@ BTC-federation provides trustless custody of BTC on L1 through multisig implemen
 # Performance Requirements
 ## Multisig operations
 - Complete multisig workflow (signature only) must execute within 2 minutes for all participant counts
+
+
+# Stacking
+- Every participant in the federation is expected to stake their BTC in order to be albe to become a member of the Federation.
+- The stake amount is defined by the Federation itself and so defines the max capacity of funds that can be held by the Federation (users <-> Hubs custody)
+
+
+# Staking cascade
+todo: document Federation A -> Federtation B -> Federation C and all other federations.
+
+
+# Random participants shuffle 
+todo: document how the participants are shuffled randomly.
