@@ -57,7 +57,7 @@ The current architecture tightly couples all storage handlers to SQLite, making 
 #### New Features/Enhancements
 - **Database Provider Abstraction**: Create interface layer for all storage handlers
 - **PostgreSQL Implementation**: Full PostgreSQL implementation for all storage operations
-- **Single-Line Configuration**: Runtime database provider selection via single configuration string
+- **Single-Line Configuration**: Database provider selection at node startup via RFC 3986 URI format
 - **Connection Management**: Abstract connection handling for both providers
 
 #### Bug Fixes & Technical Improvements
@@ -143,8 +143,8 @@ The current architecture tightly couples all storage handlers to SQLite, making 
    - **Priority**: High
    - **Dependencies**: Database Provider Interface Abstraction
 
-4. **Single-Line Database Configuration**
-   - **Description**: Extend Settings class to support single-line database provider configuration with delimiter-separated credentials
+4. **Single-Line Database Configuration** 
+- **Description**: Extend Settings class to support RFC 3986 URI format for database provider configuration at node startup
    - **User Story**: As a system administrator, I want to specify database provider and credentials in one configuration line so that deployment is simplified
    - **Rationale**: Follows common practice for database connection strings and simplifies deployment
    - **Builds Upon**: Existing Settings infrastructure
@@ -207,16 +207,17 @@ The current architecture tightly couples all storage handlers to SQLite, making 
 #### Performance
 - PostgreSQL operations must perform comparably to SQLite for similar workloads
 - No performance degradation for existing SQLite deployments
-- Connection pooling efficiency for PostgreSQL
+- Efficient single static connection pattern for PostgreSQL (підготовка до майбутнього пулу з'єднань)
+- Performance considerations must be taken into account during implementation
+- No performance measurements or benchmarks required after implementation completion
 
 #### Security
 - Database credentials secure parsing from configuration string
 - SQL injection prevention for both providers
-- Connection encryption support for PostgreSQL
 
 #### Scalability
 - PostgreSQL implementation must support concurrent connections
-- Connection pool management for PostgreSQL
+- Підготовка до можливого майбутнього пулу з'єднань PostgreSQL (не входить до поточної ітерації)
 - Prepared statement caching
 
 #### Reliability
@@ -258,15 +259,24 @@ The current architecture tightly couples all storage handlers to SQLite, making 
 ### Technology Stack Updates
 #### New Technologies/Libraries
 - `libpq`: PostgreSQL C client library for PostgreSQL implementation
+- `Google Test (GTest)`: Unit testing framework
+- `Google Mock (GMock)`: Mocking framework for database API unit testing
 - Connection pool library (future consideration when multi-threading is introduced)
+
+#### Testing Infrastructure
+- `Google Test (GTest)`: Primary unit testing framework
+- `Google Mock (GMock)`: For creating mock objects of database APIs
+- Enhanced CMake test configuration for storage tests
+- All legacy Catch2-based tests have been removed to eliminate dependency on Catch2
 
 #### Version Updates
 - No version updates required for existing dependencies
+- GMock integration into existing test build system
 
 ### Integration Requirements
 #### New Integrations
 - PostgreSQL server connection and management
-- Configuration parsing for single-line database configuration
+- Configuration parsing for RFC 3986 URI format database configuration
 
 #### Modified Integrations
 - Settings class extension for database configuration parsing
@@ -304,9 +314,10 @@ The current architecture tightly couples all storage handlers to SQLite, making 
 | Milestone | Date | Description | Dependencies | Risk Level |
 |-----------|------|-------------|--------------|------------|
 | Interface Design Complete | Week 2 | All interface classes defined and validated | N/A | Low |
-| SQLite Refactoring Complete | Week 4 | All SQLite classes refactored with tests passing | Interface Design | Medium |
-| PostgreSQL Implementation Complete | Week 6 | All PostgreSQL classes implemented with tests | SQLite Refactoring | High |
-| Integration Complete | Week 8 | Configuration and factory integration working | PostgreSQL Implementation | Medium |
+| SQLite Refactoring Complete | Week 4 | All SQLite classes refactored and working | Interface Design | Medium |
+| PostgreSQL Implementation Complete | Week 6 | All PostgreSQL classes implemented | SQLite Refactoring | High |
+| Unit Tests Complete | Week 7 | Comprehensive unit test suite with 95% coverage | PostgreSQL Implementation | Medium |
+| Integration Complete | Week 8 | Configuration and factory integration working | Unit Tests | Medium |
 
 ### Dependencies on Other Teams/Projects
 - PostgreSQL server setup for testing environments
@@ -319,7 +330,20 @@ The current architecture tightly couples all storage handlers to SQLite, making 
 
 ### Detailed Task Breakdown
 
-#### Phase 1: Interface Abstraction (Week 1-2)
+#### Phase 0: Legacy Tests Cleanup (Blocking)
+**Rationale:** The project currently contains a Catch2-based test suite located under `src/tests`. Since the new testing stack will use Google Test (GTest) + Google Mock (GMock), all existing Catch2 tests must be removed before the new test infrastructure is introduced to avoid conflicting dependencies.
+
+**Tasks:**
+1. Delete the entire `src/tests` directory and all sub-directories.
+2. Remove the bundled `catch.hpp` single-header library.
+3. Delete or comment out any references to Catch2 or the removed test sources in all `CMakeLists.txt` files (root and submodules).
+4. Push a dedicated "Remove legacy Catch2 tests" commit to the branch before starting any GTest development work.
+
+**Exit Criteria:**
+– Clean build with `BUILD_TESTING` turned **OFF** succeeds without any Catch2 references.
+– Continuous Integration pipeline passes with the legacy tests absent.
+
+#### Phase 1: Interface Abstraction
 **Tasks:**
 - Create abstract base classes for all 16 handlers
 - Define pure virtual methods matching existing signatures
@@ -330,7 +354,7 @@ The current architecture tightly couples all storage handlers to SQLite, making 
 - Interface classes define virtual methods only, no connection management
 - Implementation classes handle provider-specific connections
 
-#### Phase 2: SQLite Implementation Refactoring (Week 3-4)
+#### Phase 2: SQLite Implementation Refactoring
 **Tasks:**
 - Refactor existing classes to inherit from interfaces
 - Preserve static connection management for SQLite
@@ -358,7 +382,7 @@ private:
 };
 ```
 
-#### Phase 3: PostgreSQL Implementation (Week 5-6)
+#### Phase 3: PostgreSQL Implementation
 **Tasks:**
 - Implement all 16 PostgreSQL handler classes
 - Use static connection management (same pattern as SQLite)
@@ -387,9 +411,23 @@ private:
 };
 ```
 
-#### Phase 4: Configuration & Factory Integration (Week 7-8)
+#### Phase 4: Unit Tests Implementation
 **Tasks:**
-- Extend Settings class for single-line configuration parsing
+- Set up testing infrastructure with Google Test and GMock integration
+- Create mock objects for SQLite and PostgreSQL APIs
+- Implement helper classes for common mock expectations
+- Create test fixtures and data factories
+- Write comprehensive unit tests for all 32 handler classes (16 SQLite + 16 PostgreSQL)
+
+**Test Implementation Coverage:**
+- Parameter validation tests for all methods
+- Error handling and exception tests
+- Business logic tests with mocked database responses
+- Edge case testing (null parameters, empty data, boundary conditions)
+
+#### Phase 5: Configuration & Factory Integration
+**Tasks:**
+- Extend Settings class for RFC 3986 URI format configuration parsing
 - Implement provider factory pattern with static connection initialization
 - Update initialization points in Core classes
 - Add configuration validation and error handling
@@ -419,11 +457,13 @@ StorageHandlerPostgreSQL::connection("localhost", 5432, "user", "pass", "storage
 ### Technical Risks
 | Risk | Impact | Probability | Mitigation Strategy |
 |------|--------|-------------|-------------------|
-| PostgreSQL SQL compatibility issues | High | Medium | Early prototyping, comprehensive testing |
-| Configuration parsing complexity | Medium | Low | Thorough testing of edge cases |
+| PostgreSQL SQL compatibility issues | High | Medium | Early prototyping with mocked unit tests, real SQL testing in later phases |
+| Configuration parsing complexity | Medium | Low | Thorough unit testing of edge cases with mocked data |
 | Unified static connection management | Low | Low | Both providers use same proven static pattern, consistent architecture |
-| Data type mapping issues | High | Medium | Detailed mapping documentation, testing |
+| Data type mapping issues | High | Medium | Detailed mapping documentation, comprehensive unit test coverage |
 | PostgreSQL connection persistence | Medium | Low | Static connection with reconnection logic, proper error handling |
+| Mock complexity for database APIs | Medium | Low | Use proven GMock framework, helper classes for common expectations |
+| Limited real database testing | Medium | Medium | Focus unit tests on business logic, defer integration testing to later phases |
 
 ### Business Risks
 | Risk | Impact | Probability | Mitigation Strategy |
@@ -433,27 +473,136 @@ StorageHandlerPostgreSQL::connection("localhost", 5432, "user", "pass", "storage
 
 ## Testing Strategy
 ### Testing Approach for This Iteration
-#### New Feature Testing
-- Unit tests for all interface implementations
-- Integration tests for both database providers
-- Configuration parsing tests for various input formats
+#### Unit Testing Only
+- **Focus**: Pure unit tests for business logic and parameter validation
+- **Scope**: SQLite and PostgreSQL handler implementations only (no interface tests)
+- **Approach**: Mock database APIs for both providers to ensure consistency and speed
+- **Framework**: Google Test (GTest)
 
-#### Regression Testing
-- **Scope**: All existing storage functionality with SQLite provider
-- **Automated vs Manual**: 90% automated unit and integration tests, 10% manual configuration testing
-- **Critical User Journeys**: Database initialization, transaction processing, data persistence
+#### Mocking Strategy
+- **SQLite**: Mock sqlite3 API calls (sqlite3_prepare_v2, sqlite3_bind_*, sqlite3_step, etc.)
+- **PostgreSQL**: Mock libpq API calls (PQexecParams, PQgetvalue, PQclear, etc.)
+- **Benefits**: Microsecond execution, full isolation, deterministic results
+- **Tools**: Google Mock (GMock) for creating mock objects
 
-#### Performance Testing
-- **Baseline Metrics**: Current SQLite performance benchmarks
-- **Target Metrics**: PostgreSQL performance within 20% of SQLite for comparable operations
-- **Load Testing**: Concurrent access testing for PostgreSQL
+#### Test Structure
+```
+src/tests/storage/
+├── fixtures/
+│   ├── TestDataFactory.h/.cpp         # Factory for creating test data
+│   ├── AuditTestFixtures.h/.cpp        # Audit-specific test data
+│   └── TrustLineTestFixtures.h/.cpp    # TrustLine-specific test data
+├── helpers/
+│   ├── MockExpectationsHelper.h/.cpp   # Helper for setting up mock expectations
+│   └── MockDatabaseAPIs.h              # Common mock interfaces
+├── mocks/
+│   ├── MockSQLiteAPI.h                 # Mock for SQLite3 API
+│   └── MockPostgreSQLAPI.h             # Mock for PostgreSQL libpq API
+├── sqlite/
+│   ├── AuditHandlerSQLiteTest.cpp      # Unit tests for SQLite implementation
+│   ├── TrustLineHandlerSQLiteTest.cpp
+│   └── [+14 other SQLite handler tests]
+├── postgresql/
+│   ├── AuditHandlerPostgreSQLTest.cpp  # Unit tests for PostgreSQL implementation
+│   ├── TrustLineHandlerPostgreSQLTest.cpp
+│   └── [+14 other PostgreSQL handler tests]
+└── CMakeLists.txt
+```
+
+#### What We Test (Unit Tests Only)
+- **Parameter validation**: null checks, range validation, type validation
+- **Business logic**: data transformation, calculation logic, state management
+- **Error handling**: exception throwing, error recovery, boundary conditions
+- **API interaction**: correct sequence of database API calls through mocks
+- **Edge cases**: empty data, large datasets, boundary values
+
+#### What We Don't Test (Out of Scope)
+- **SQL syntax correctness**: Database responsibility
+- **Network connectivity**: Infrastructure concern
+- **File system operations**: Integration testing concern
+- **Transaction consistency**: Integration testing concern
+- **Performance**: Separate performance testing phase
+
+#### Example Unit Test Implementation
+```cpp
+// src/tests/storage/sqlite/AuditHandlerSQLiteTest.cpp
+#include "catch.hpp"
+#include "../../../core/io/storage/sqlite/AuditHandlerSQLite.h"
+#include "../mocks/MockSQLiteAPI.h"
+#include "../helpers/MockExpectationsHelper.h"
+#include "../fixtures/AuditTestFixtures.h"
+
+TEST_CASE("AuditHandlerSQLite unit tests", "[audit][sqlite][unit]") {
+    // Arrange
+    MockSQLiteAPI mockAPI;
+    Logger logger;
+    
+    SECTION("saveFullAudit - successful save") {
+        // Arrange
+        MockExpectationsHelper::expectSQLiteTableCreation(mockAPI);
+        AuditHandlerSQLite handler(&mockAPI, "test_audit", logger);
+        
+        MockExpectationsHelper::expectSQLiteSuccessfulInsert(mockAPI);
+        auto testData = AuditTestFixtures::createValidFullAuditData();
+        
+        // Act & Assert
+        REQUIRE_NOTHROW(handler.saveFullAudit(
+            testData.auditNumber,
+            testData.trustLineID,
+            testData.ownKeyHash,
+            testData.ownSignature,
+            testData.contractorKeyHash,
+            testData.contractorSignature,
+            testData.ownKeysSetHash,
+            testData.contractorKeysSetHash,
+            testData.incomingAmount,
+            testData.outgoingAmount,
+            testData.balance
+        ));
+    }
+    
+    SECTION("saveFullAudit - null parameter validation") {
+        // Arrange
+        MockExpectationsHelper::expectSQLiteTableCreation(mockAPI);
+        AuditHandlerSQLite handler(&mockAPI, "test_audit", logger);
+        auto testData = AuditTestFixtures::createValidFullAuditData();
+        
+        // Act & Assert (no mock expectations - validation should fail before DB call)
+        REQUIRE_THROWS_AS(handler.saveFullAudit(
+            testData.auditNumber,
+            testData.trustLineID,
+            nullptr,  // ← Invalid parameter
+            testData.ownSignature,
+            testData.contractorKeyHash,
+            testData.contractorSignature,
+            testData.ownKeysSetHash,
+            testData.contractorKeysSetHash,
+            testData.incomingAmount,
+            testData.outgoingAmount,
+            testData.balance
+        ), std::invalid_argument);
+    }
+}
+```
+
+#### Test Coverage Requirements
+- **Unit Tests**: 95% code coverage for all handler implementations
+- **Parameter Validation**: 100% coverage of input validation logic
+- **Error Handling**: 90% coverage of exception scenarios
+- **Business Logic**: 100% coverage of core functionality methods
+
+#### Technology Stack for Testing
+- **Framework**: Google Test (GTest)
+- **Mocking**: Google Mock (GMock) for database API mocking
+- **Build System**: CMake integration with Google Test/GMock infrastructure
+- **Execution**: Local development environment, CI/CD pipeline integration
 
 ### Quality Gates
-- All existing tests pass with SQLite provider
-- New PostgreSQL tests achieve 90% code coverage
-- Performance benchmarks met
-- No memory leaks or resource issues
-- Configuration parsing handles all edge cases correctly
+- All existing SQLite functionality tests pass
+- New unit tests achieve 95% code coverage
+- No memory leaks or resource issues in mocked tests
+- All parameter validation edge cases covered
+- Mock expectations properly validate API call sequences
 
 ## Deployment & Release Strategy
 ### Release Approach
@@ -462,8 +611,9 @@ StorageHandlerPostgreSQL::connection("localhost", 5432, "user", "pass", "storage
 - **Rollback Plan**: Configuration change to revert to SQLite provider
 
 ### Feature Flags & Gradual Rollout
-- Database provider selection via configuration only
-- No runtime switching between providers
+- Database provider selection via configuration at node startup only
+- No runtime switching between providers during node operation
+- Provider selection is permanent for the entire node lifecycle
 - Clear error messages for configuration issues
 
 ### Database Migrations
@@ -482,9 +632,14 @@ StorageHandlerPostgreSQL::connection("localhost", 5432, "user", "pass", "storage
   - Configuration-driven provider selection working in 100% of test scenarios
   - Zero regression in SQLite functionality
   - PostgreSQL provider functionality equivalent to SQLite
-- **Leading Indicators**: Test pass rates, performance benchmark results
-- **Baseline Values**: Current SQLite test coverage and performance
-- **Target Values**: 100% test compatibility, performance within tolerance
+  - Unit test coverage: 95% for all handler implementations
+- **Leading Indicators**: Unit test pass rates, code coverage metrics, mock test execution speed
+- **Baseline Values**: Current SQLite functionality and existing test coverage
+- **Target Values**: 
+  - 100% functional compatibility between providers
+  - 95% unit test code coverage
+  - Тривалість виконання всіх юніт-тестів ≤ 30 секунд у CI-середовищі
+  - JSON Schema та Doxygen XML артефакти успішно проходять автоматичну перевірку
 
 ### Monitoring Plan
 - **New Dashboards/Alerts**: Database connection health monitoring
@@ -494,7 +649,7 @@ StorageHandlerPostgreSQL::connection("localhost", 5432, "user", "pass", "storage
 ### Review Schedule
 - **Daily**: Development progress and test results
 - **Weekly**: Performance benchmark reviews and milestone progress
-- **Post-Release Review**: 2 weeks after release completion
+- **Post-Release Review**: після завершення релізу
 
 ## Appendices
 ### Glossary
@@ -502,7 +657,7 @@ StorageHandlerPostgreSQL::connection("localhost", 5432, "user", "pass", "storage
 - **Interface**: Abstract class defining storage handler contract
 - **Handler**: Class responsible for specific data type storage operations
 - **Factory**: Pattern for creating appropriate provider instances
-- **Single-Line Configuration**: Configuration format with provider and credentials in one string separated by delimiters
+- **Single-Line Configuration**: RFC 3986 URI format for database provider configuration with embedded credentials and connection details
 
 ### References
 - SQLite Documentation: https://sqlite.org/docs.html
@@ -516,13 +671,21 @@ Not applicable for backend database implementation.
 Interface definitions will be documented in header files with comprehensive documentation comments.
 
 ### Configuration Examples
-```
-# SQLite configuration
-"database_config": "sqlite|io"
+Following RFC 3986 URI standard with adaptations for database providers:
 
-# PostgreSQL configuration  
-"database_config": "postgresql|localhost|5432|vtcpd_user|secure_password"
+```json
+# SQLite configuration (scheme + directory)
+"database_config": "sqlite3:///path/to/database/directory"
+
+# PostgreSQL configuration (full URI without database names)
+"database_config": "postgresql://vtcpd_user:secure_password@localhost:5432/"
 ```
+
+**Configuration Format Details:**
+- **SQLite**: `sqlite3:///directory_path` (version specified as sqlite3, directory only)
+- **PostgreSQL**: `postgresql://user:password@host:port/` (standard URI without database names)
+- **Database Names**: Fixed as "storageDB" and "communicatorStorageDB" for both providers
+- **Path Handling**: SQLite uses absolute paths, PostgreSQL follows URI specification
 
 ---
 
@@ -536,3 +699,14 @@ Interface definitions will be documented in header files with comprehensive docu
 - **Previous Iteration PRD**: N/A (Initial PRD)
 - **Technical Architecture**: src/core/io/storage module documentation
 - **User Research**: Production deployment requirements analysis 
+
+6. **AI-Agent Oriented Machine-Readable Artefacts**
+   - **Description**: Generate and publish machine-readable artefacts (JSON Schema for configuration, Doxygen XML interface descriptors) to facilitate autonomous tooling and AI-agent integration.
+   - **User Story**: Як AI-агент, я хочу отримувати структуровані дані про конфігурацію та інтерфейси, щоб автоматично генерувати інтеграційні тести та документацію.
+   - **Rationale**: Виконання корпоративної вимоги «Орієнтація на AI-агентів».
+   - **Acceptance Criteria**:
+     - JSON Schema для параметра `database_config` розміщено у каталозі `docs/` і проходить валідацію CI.
+     - При побудові CI генерується Doxygen XML для всіх нових інтерфейсів та реалізацій.
+     - Приклади конфігураційних JSON-файлів успішно перевіряються скриптом валідації у CI.
+   - **Priority**: Medium
+   - **Dependencies**: Single-Line Database Configuration, Provider Factory Implementation 
