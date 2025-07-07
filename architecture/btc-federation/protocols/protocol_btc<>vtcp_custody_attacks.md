@@ -2,7 +2,7 @@
 
 _Mykola Ilaschuk, Dima Chizhevsky, 🤖 Gemini 2.5 Pro, 🤖 Claude 4 Sonnet_
 <br>
-_v0.1, 2025-06-30_
+_v0.2, 2025-07-07_
 <br>
 <br>
 
@@ -41,7 +41,7 @@ A malicious user may attempt to defraud the Hub or disrupt the network.
 - **Mitigation:**
     - **Nonce/Sequence Number:** Every channel reconciliation has a monotonically increasing sequence number. The Federation will always reject a state if a state with a higher number has already been seen.
     - **Hub Challenge Window (Flow 3, Step 3):** The Hub is given a mandatory window to contest the user's claim by providing its own channel state. The state with the highest sequence number always wins.
-    - **Window Refresh Logic (Flow 3, Step 3 Security Note):** If the Hub successfully contests the claim, the challenge window is reset and restarted. This prevents the user from waiting until the last second to submit their outdated state, giving the Hub no time to react.
+    - **Strictly Greater Sequence Number Rule:** As clarified in the redemption protocol v0.2, a contestation is only considered valid if the sequence number of the contesting state is **strictly greater** than the sequence number of the current "winning" state in the redemption attempt. This prevents griefing attacks where a malicious party could reset the challenge window with an equivalent or inferior state.
 
 **1.2. Reversal Fraud (L2/L1 Double Spend)**
 - **Attack:** A malicious user attempts to receive L2 funds from the Hub and then fraudulently reclaim their original L1 deposit, effectively stealing from the Hub.
@@ -52,7 +52,7 @@ A malicious user may attempt to defraud the Hub or disrupt the network.
 - **Mitigation:**
     - **Hub Liveness Requirement:** This attack is fundamentally a race condition. The protocol's primary defense is the Hub's ability to contest the fraudulent reversal. This imposes a strict liveness requirement on the Hub, which must monitor for reversal requests and respond immediately with the `ContestDepositReversal` call, providing the co-signed `ChannelReconciliation` as proof of L2 issuance.
     - **Extended Challenge Window:** The `DEPOSIT_REVERSAL_CHALLENGE_PERIOD_SECONDS` is set to 72 hours. This period is intentionally long and aligned with the standard redemption window. The rationale is that Hubs are heavily invested, professional entities. A failure to issue L2 funds is considered a less likely fault scenario than a user attempting to redeem. This extended window gives a Hub ample time to recover from any temporary outage and contest a fraudulent reversal, prioritizing the Hub's security against this form of theft. At the same time, it provides a reliable, albeit slow, recovery path for users in the case of a genuinely failed Hub.
-    - **Proactive L2 Issuance Confirmation:** The most critical defense for the Hub is to call `ConfirmL2Issuance` immediately after the L2 funds are issued and co-signed. This action marks the deposit as "settled" and permanently prevents any future reversal attempts for that `deposit_id`.
+    - **Proactive L2 Issuance Confirmation:** The most critical defense for the Hub is to call `ConfirmL2Issuance` immediately after the L2 funds are issued and co-signed. This action marks the deposit as "settled" and permanently prevents any future reversal attempts for that `deposit_id`. It is also recommended that the user's client calls this endpoint as well for redundancy.
 
 **1.3. Hub Resource Liveness Attack (Issuance Griefing)**
 - **Attack:** A malicious user repeatedly initiates the issuance process but intentionally abandons it before committing resources. In the original protocol design, this forced the Hub to reserve capital and a channel slot for a request that would never be fulfilled, allowing an attacker to cheaply exhaust a Hub's resources and deny service to legitimate users.
@@ -109,6 +109,11 @@ A malicious user may attempt to defraud the Hub or disrupt the network.
         - **Proof-of-Work (PoW):** Introduce a client-side Proof-of-Work challenge for `DepositRequest` submissions. The complexity of the PoW can be dynamically adjusted, potentially increasing for IP addresses or IP zones identified as sources of excessive or invalid requests. This imposes a computational cost on attackers, making large-scale spamming economically unfeasible.
     - **Early Rejection of Malformed Protobufs:** Implement strict and fast validation of incoming message formats. Malformed protobufs or requests that fail basic structural checks should be rejected immediately, without proceeding to more resource-intensive steps like hashing or signature verification.
 
+**1.7. DoS via Redemption Transaction Log Spam**
+- **Attack:** During a non-cooperative redemption, a malicious party submits a `RedemptionRequest` with a valid base state but includes an enormous list of subsequent transactions in the `subsequent_transactions` field. This forces the Federation to perform excessive computation to validate each transaction and calculate the "effective state," potentially overwhelming its resources and delaying legitimate redemptions for other users.
+- **Mitigation:**
+    - **Transaction Limit:** As specified in the redemption protocol v0.2, the Federation enforces a `MAX_SUBSEQUENT_TRANSACTIONS_PER_REQUEST` limit (defaulting to 512). Any `RedemptionRequest` exceeding this limit is rejected immediately, preventing the computational DoS attack. This also implies a requirement on the vTCP protocol to ensure that channels do not accumulate more than this number of un-reconciled transactions.
+
 ---
 
 #### **Category 2: Malicious Hub Attacks**
@@ -133,17 +138,22 @@ A malicious Hub may attempt to steal user funds, create unbacked vTCP tokens, or
 
 ---
 
-#### **Category 3: Collusion Attacks**
+#### **Category 3: Economic and Collusion Attacks**
 
-This category involves multiple parties colluding to undermine the system.
+This category involves multiple parties colluding or exploiting economic incentives to undermine the system.
 
-**3.1. User-Hub Collusion to Defraud Third Parties**
+**3.1. Federation Resource Drain via Unspecified Redemption Fees**
+- **Attack:** The protocol for redemption does not explicitly state how L1 transaction fees for the final payout are handled. If the Federation were to cover this fee from its own operational funds, an attacker could repeatedly open small channels, redeem them, and force the Federation to pay the L1 fees, creating a slow but steady drain on its resources.
+- **Mitigation:**
+    - **Self-Funding Redemptions:** The redemption protocol v0.2 explicitly states that the L1 transaction fee for the redemption payout is deducted from the final balances of the User and the Hub, proportional to their share of the funds. This makes redemptions self-funding and removes the economic incentive for this attack.
+
+**3.2. User-Hub Collusion to Defraud Third Parties**
 - **Attack:** A user and a Hub collude to create a fraudulent channel state showing a very large balance. They then present this fake state to an external system (e.g., a DeFi lending platform) as proof of funds to secure a loan they have no intention of repaying.
 - **Mitigation:**
     - **Federation as the Single Source of Truth:** The protocol establishes the Federation as the sole arbiter of channel states. Any external entity wishing to verify a channel's balance **must** query the Federation's public API or validate the state against the published Proof-of-Reserve audit data (Flow 5). An off-chain state provided by a user and Hub alone must never be trusted.
     - **Public Audit Trail (Flow 5):** The regular, public, Merkle-based audits allow any third party to independently verify a Hub's solvency and, with the user's help, confirm a specific channel's inclusion in the audit.
 
-**3.2. Federation Member Collusion (Hub Stake Overflow)**
+**3.3. Federation Member Collusion (Hub Stake Overflow)**
 - **Attack:** A malicious supermajority of Federation members collude to approve vTCP token issuance for a Hub without a corresponding L1 deposit, creating unbacked vTCP tokens. This is the "Hub Stake Overflow" scenario.
 - **Mitigation:**
     - **Decentralization and M-of-N Trust Model:** The fundamental security of the entire system rests on the assumption that a qualified majority (M) of the N Federation members are honest. The primary mitigation is ensuring that the N members are operated by distinct, non-colluding entities in different legal and geographical jurisdictions.
