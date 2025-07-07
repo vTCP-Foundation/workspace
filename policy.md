@@ -194,7 +194,8 @@ It aims to eliminate ambiguity, reduce supervision needs, and facilitate automat
 
 | Directory | Description |
 |-----------|-------------|
-| `architecture/<project-name>/` | Architecture Decision Records for a specific project. |
+| `architecture/<project-name>/adrs/` | Architecture Decision Records for a specific project. |
+| `architecture/<project-name>/protocols/` | Protocols for a specific project. |
 | `docs/` | General, project-agnostic documentation. |
 | `workflow/prd/<project-name>/` | Product Requirements Documents for a specific project. |
 | `workflow/tasks/<project-name>/` | Task definitions for a specific project. |
