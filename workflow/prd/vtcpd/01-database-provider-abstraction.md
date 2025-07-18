@@ -302,13 +302,14 @@ The current architecture tightly couples all storage handlers to SQLite, making 
 
 ## Implementation Plan
 ### This Iteration Timeline
-- **Duration**: 6-8 weeks
-- **Sprint Breakdown**: 4 sprints of 2 weeks each
+- **Duration**: 8-10 weeks
+- **Sprint Breakdown**: 5 sprints of 2 weeks each
 - **Key Deliverables**: 
   - Week 2: Interface abstraction complete
   - Week 4: SQLite refactoring complete
   - Week 6: PostgreSQL implementation complete
   - Week 8: Configuration and factory integration complete
+  - Week 10: PostgreSQL integration tests complete
 
 ### Iteration Milestones
 | Milestone | Date | Description | Dependencies | Risk Level |
@@ -318,6 +319,7 @@ The current architecture tightly couples all storage handlers to SQLite, making 
 | PostgreSQL Implementation Complete | Week 6 | All PostgreSQL classes implemented | SQLite Refactoring | High |
 | Unit Tests Complete | Week 7 | Comprehensive unit test suite with 95% coverage | PostgreSQL Implementation | Medium |
 | Integration Complete | Week 8 | Configuration and factory integration working | Unit Tests | Medium |
+| PostgreSQL Integration Tests Complete | Week 10 | All PostgreSQL integration tests implemented and passing | Integration Complete | Medium |
 
 ### Dependencies on Other Teams/Projects
 - PostgreSQL server setup for testing environments
@@ -442,6 +444,28 @@ StorageHandlerSQLite::connection("storageDB", "io");
 StorageHandlerPostgreSQL::connection("localhost", 5432, "user", "pass", "storageDB");
 ```
 
+#### Phase 6: PostgreSQL Integration Tests
+**Tasks:**
+- Create integration test infrastructure in `src/tests/storage/integration/` directory
+- Implement integration tests for all 15 PostgreSQL handler classes
+- Create test fixtures and helper classes for database setup/teardown
+- Test all public methods with real PostgreSQL database operations
+- Ensure test isolation and proper cleanup between test cases
+- Validate table creation, data persistence, and error handling
+
+**Integration Test Classes:**
+- AddressHandlerPostgreSQL, AuditHandlerPostgreSQL, AuditRulesHandlerPostgreSQL
+- ContractorKeysHandlerPostgreSQL, ContractorsHandlerPostgreSQL, FeaturesHandlerPostgreSQL
+- IncomingPaymentReceiptHandlerPostgreSQL, OutgoingPaymentReceiptHandlerPostgreSQL
+- OwnKeysHandlerPostgreSQL, PaymentKeysHandlerPostgreSQL, PaymentParticipantsVotesHandlerPostgreSQL
+- PaymentTransactionsHandlerPostgreSQL, TransactionsHandlerPostgreSQL, TrustLineHandlerPostgreSQL
+- CommunicatorMessagesQueueHandlerPostgreSQL
+
+**Prerequisites:**
+- PostgreSQL server installed and running
+- Test databases created: "storageDB" and "communicatorStorageDB"
+- Database credentials hardcoded in test code for simplicity
+
 ### Resource Requirements
 #### Team Structure
 - **Technical Lead**: Senior developer with database expertise
@@ -450,7 +474,8 @@ StorageHandlerPostgreSQL::connection("localhost", 5432, "user", "pass", "storage
 
 #### Budget Estimates
 - Development effort: 320-480 hours
-- Testing effort: 160-240 hours
+- Unit testing effort: 160-240 hours
+- Integration testing effort: 80-120 hours
 - Infrastructure: PostgreSQL testing environments
 
 ## Risk Management
@@ -463,7 +488,9 @@ StorageHandlerPostgreSQL::connection("localhost", 5432, "user", "pass", "storage
 | Data type mapping issues | High | Medium | Detailed mapping documentation, comprehensive unit test coverage |
 | PostgreSQL connection persistence | Medium | Low | Static connection with reconnection logic, proper error handling |
 | Mock complexity for database APIs | Medium | Low | Use proven GMock framework, helper classes for common expectations |
-| Limited real database testing | Medium | Medium | Focus unit tests on business logic, defer integration testing to later phases |
+| PostgreSQL integration test environment setup | Medium | Medium | Provide clear setup documentation, standardize test database configuration |
+| Integration test execution time | Low | Medium | Optimize test cleanup, run tests in parallel where possible |
+| Integration test data isolation | Medium | Low | Implement proper test fixtures with cleanup, use unique test data per test |
 
 ### Business Risks
 | Risk | Impact | Probability | Mitigation Strategy |
@@ -597,12 +624,148 @@ TEST_CASE("AuditHandlerSQLite unit tests", "[audit][sqlite][unit]") {
 - **Build System**: CMake integration with Google Test/GMock infrastructure
 - **Execution**: Local development environment, CI/CD pipeline integration
 
+#### PostgreSQL Integration Testing
+- **Purpose**: Validate PostgreSQL implementations with real database interactions
+- **Scope**: Integration testing for all PostgreSQL handler classes using real database connections
+- **Approach**: Direct database interaction testing without mocks
+- **Framework**: Google Test (GTest)
+
+**Prerequisites:**
+- PostgreSQL server installed and running
+- Test databases created: "storageDB" and "communicatorStorageDB"
+- Database credentials hardcoded in test code for simplicity
+
+**Test Structure:**
+```
+src/tests/storage/
+├── integration/
+│   ├── fixtures/
+│   │   ├── PostgreSQLTestFixtures.h/.cpp    # Real data fixtures for PostgreSQL tests
+│   │   └── DatabaseTestHelper.h/.cpp        # Helper for database setup/teardown
+│   ├── postgresql/
+│   │   ├── AddressHandlerPostgreSQLIntegrationTest.cpp
+│   │   ├── AuditHandlerPostgreSQLIntegrationTest.cpp
+│   │   ├── AuditRulesHandlerPostgreSQLIntegrationTest.cpp
+│   │   ├── ContractorKeysHandlerPostgreSQLIntegrationTest.cpp
+│   │   ├── ContractorsHandlerPostgreSQLIntegrationTest.cpp
+│   │   ├── FeaturesHandlerPostgreSQLIntegrationTest.cpp
+│   │   ├── IncomingPaymentReceiptHandlerPostgreSQLIntegrationTest.cpp
+│   │   ├── OutgoingPaymentReceiptHandlerPostgreSQLIntegrationTest.cpp
+│   │   ├── OwnKeysHandlerPostgreSQLIntegrationTest.cpp
+│   │   ├── PaymentKeysHandlerPostgreSQLIntegrationTest.cpp
+│   │   ├── PaymentParticipantsVotesHandlerPostgreSQLIntegrationTest.cpp
+│   │   ├── PaymentTransactionsHandlerPostgreSQLIntegrationTest.cpp
+│   │   ├── TransactionsHandlerPostgreSQLIntegrationTest.cpp
+│   │   ├── TrustLineHandlerPostgreSQLIntegrationTest.cpp
+│   │   └── CommunicatorMessagesQueueHandlerPostgreSQLIntegrationTest.cpp
+│   └── CMakeLists.txt
+└── CMakeLists.txt
+```
+
+**Integration Test Coverage:**
+- **All Public Methods**: Every public method of each PostgreSQL handler class
+- **Real Database Operations**: Insert, update, delete, select operations with actual PostgreSQL database
+- **Table Creation**: Verify table creation and schema correctness
+- **Data Persistence**: Verify data is correctly saved and retrieved
+- **Error Handling**: Test database connection failures and constraint violations
+- **Transaction Consistency**: Test transaction rollback and commit behavior
+
+**Test Classes to Cover:**
+- AddressHandlerPostgreSQL
+- AuditHandlerPostgreSQL
+- AuditRulesHandlerPostgreSQL
+- ContractorKeysHandlerPostgreSQL
+- ContractorsHandlerPostgreSQL
+- FeaturesHandlerPostgreSQL
+- IncomingPaymentReceiptHandlerPostgreSQL
+- OutgoingPaymentReceiptHandlerPostgreSQL
+- OwnKeysHandlerPostgreSQL
+- PaymentKeysHandlerPostgreSQL
+- PaymentParticipantsVotesHandlerPostgreSQL
+- PaymentTransactionsHandlerPostgreSQL
+- TransactionsHandlerPostgreSQL
+- TrustLineHandlerPostgreSQL
+- CommunicatorMessagesQueueHandlerPostgreSQL
+
+**Example Integration Test:**
+```cpp
+// src/tests/storage/integration/postgresql/AuditHandlerPostgreSQLIntegrationTest.cpp
+#include "gtest/gtest.h"
+#include "../../../../core/io/storage/postgresql/AuditHandlerPostgreSQL.h"
+#include "../fixtures/PostgreSQLTestFixtures.h"
+#include "../fixtures/DatabaseTestHelper.h"
+
+class AuditHandlerPostgreSQLIntegrationTest : public ::testing::Test {
+protected:
+    void SetUp() override {
+        // Hardcoded credentials for test environment
+        const std::string host = "localhost";
+        const int port = 5432;
+        const std::string user = "vtcpd_test";
+        const std::string password = "test_password";
+        const std::string dbName = "storageDB";
+        
+        mConnection = DatabaseTestHelper::createConnection(host, port, user, password, dbName);
+        mHandler = std::make_unique<AuditHandlerPostgreSQL>(mConnection, "audit_test", mLogger);
+        
+        // Clean up test table
+        DatabaseTestHelper::cleanupTable(mConnection, "audit_test");
+    }
+    
+    void TearDown() override {
+        DatabaseTestHelper::cleanupTable(mConnection, "audit_test");
+        DatabaseTestHelper::closeConnection(mConnection);
+    }
+    
+    PGconn* mConnection;
+    std::unique_ptr<AuditHandlerPostgreSQL> mHandler;
+    Logger mLogger;
+};
+
+TEST_F(AuditHandlerPostgreSQLIntegrationTest, saveFullAudit_ValidData_SavesAndRetrievesCorrectly) {
+    // Arrange
+    auto testData = PostgreSQLTestFixtures::createValidFullAuditData();
+    
+    // Act
+    ASSERT_NO_THROW(mHandler->saveFullAudit(
+        testData.auditNumber,
+        testData.trustLineID,
+        testData.ownKeyHash,
+        testData.ownSignature,
+        testData.contractorKeyHash,
+        testData.contractorSignature,
+        testData.ownKeysSetHash,
+        testData.contractorKeysSetHash,
+        testData.incomingAmount,
+        testData.outgoingAmount,
+        testData.balance
+    ));
+    
+    // Assert
+    auto retrievedAudit = mHandler->getActualAudit(testData.trustLineID, testData.auditNumber);
+    ASSERT_NE(retrievedAudit, nullptr);
+    EXPECT_EQ(retrievedAudit->auditNumber(), testData.auditNumber);
+    EXPECT_EQ(retrievedAudit->trustLineID(), testData.trustLineID);
+    // ... verify other fields
+}
+```
+
+**Integration Test Requirements:**
+- **Test Environment**: PostgreSQL server must be running with test databases created
+- **Database Credentials**: Hardcoded in test code for simplicity (not environment variables)
+- **Test Isolation**: Each test should clean up its data to avoid interference
+- **Coverage**: 100% method coverage for all listed PostgreSQL handler classes
+- **Execution Time**: Integration tests may take longer than unit tests due to database operations
+
 ### Quality Gates
 - All existing SQLite functionality tests pass
 - New unit tests achieve 95% code coverage
 - No memory leaks or resource issues in mocked tests
 - All parameter validation edge cases covered
 - Mock expectations properly validate API call sequences
+- PostgreSQL integration tests achieve 100% method coverage for all 15 specified handler classes
+- All integration tests pass with real PostgreSQL database connections
+- Integration test data isolation verified (tests don't interfere with each other)
 
 ## Deployment & Release Strategy
 ### Release Approach
@@ -638,7 +801,9 @@ TEST_CASE("AuditHandlerSQLite unit tests", "[audit][sqlite][unit]") {
 - **Target Values**: 
   - 100% functional compatibility between providers
   - 95% unit test code coverage
+  - 100% method coverage for PostgreSQL integration tests
   - Тривалість виконання всіх юніт-тестів ≤ 30 секунд у CI-середовищі
+  - Тривалість виконання всіх інтеграційних тестів ≤ 5 хвилин у CI-середовищі
   - JSON Schema та Doxygen XML артефакти успішно проходять автоматичну перевірку
 
 ### Monitoring Plan
