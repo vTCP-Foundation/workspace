@@ -1,6 +1,13 @@
 # BTC ⟷ vTCP Custody Protocol - Redemption Flow
 
-_v0.1, 2025-07-01_
+_v0.2, 2025-07-07_
+
+## Summary of Changes in v0.2
+This version hardens the protocol against several potential attacks based on feedback:
+- **Anti-Griefing Logic**: Clarified the contestation mechanism to prevent malicious resetting of the challenge window. A contest is only valid if the submitted state's sequence number is strictly greater than the current highest one in the attempt.
+- **DoS Prevention**: Introduced `MAX_SUBSEQUENT_TRANSACTIONS_PER_REQUEST` with a limit of 512 to prevent computational DoS attacks via transaction log spam.
+- **Explicit Fee Handling**: Defined that L1 redemption transaction fees are deducted from the final payouts, protecting the Federation from resource drain attacks.
+- **Strengthened Replay Protection**: Refined the logic for rejecting duplicate redemption requests to be more precise.
 
 ## 1. Overview
 
@@ -21,6 +28,7 @@ This section defines key constants used throughout the redemption protocol. Impl
 | `PROTOCOL_VERSION`                     |       1       | The version number of this protocol, included in all messages to ensure compatibility between parties.                                     |
 | `COOPERATIVE_REDEMPTION_MEMO`          | "REDEMPTION"  | The required string in the `memo` field of an L2 payment to the Hub to signal a cooperative redemption request.                              |
 | `NON_COOPERATIVE_CHALLENGE_PERIOD_SECONDS` |    259200     | The duration (in seconds) of the challenge window for a non-cooperative redemption (defaulting to 72 hours). This window resets upon a valid contest. |
+| `MAX_SUBSEQUENT_TRANSACTIONS_PER_REQUEST` | 512 | The maximum number of transactions allowed in the `subsequent_transactions` list to prevent DoS attacks. |
 
 ## 3. Computed Identifier: `reconciliation_hash`
 
@@ -52,6 +60,7 @@ message RedemptionRequest {
     // most current channel balance if the counterparty is unresponsive and will not
     // co-sign a new, consolidated state.
     // In a fully cooperative flow, this field should be empty.
+    // The number of transactions MUST NOT exceed MAX_SUBSEQUENT_TRANSACTIONS_PER_REQUEST.
     repeated SignedVTCPTransaction subsequent_transactions = 3; // Note: SignedVTCPTransaction is a conceptual placeholder for a standard, signed vTCP transfer object.
 
     // The destination L1 Bitcoin address where the funds should be sent.
@@ -229,20 +238,21 @@ A party wishing to redeem funds constructs and submits a `RedemptionRequest` pay
 
 **2. Federation Processing and Challenge Window**
 -   **Action**: Upon receiving a `SubmitRedemption` call, the Federation is agnostic to how the request was formed. It performs the same validation logic for all requests.
--   **Effective State Calculation**: The Federation first calculates the **"effective state"**. It takes the `last_co_signed_state` and applies every transaction from the `subsequent_transactions` list in order. The resulting state is the basis for the redemption claim.
+-   **Effective State Calculation**: The Federation first checks if the number of transactions in `subsequent_transactions` exceeds `MAX_SUBSEQUENT_TRANSACTIONS_PER_REQUEST`. If it does, the request is rejected immediately. Otherwise, it calculates the **"effective state"** by taking the `last_co_signed_state` and applying every transaction from the `subsequent_transactions` list in order. The resulting state is the basis for the redemption claim.
 -   **Validation**: The Federation validates signatures on the base state and all subsequent transactions.
 -   **Challenge Window**: If the effective state is valid, the Federation creates a `RedemptionAttempt` record (see Section 8) and opens the **Challenge Window**. It returns a `PENDING` status to the submitter.
 
 **3. Counterparty Response**
 The counterparty is expected to be monitoring the Federation. During the challenge window, it has three options:
 
--   **Contest with a Newer State**: If the counterparty has a state with a strictly higher sequence number, it calls `ContestRedemption` with the newer state. If valid, the Federation updates its record and resets the challenge window.
+-   **Contest with a Newer State**: If the counterparty has a state with a strictly higher sequence number than the current "winning" state of the attempt, it calls `ContestRedemption` with the newer state. If valid, the Federation updates its record and resets the challenge window.
 -   **Agree and Accelerate**: This is the expected action following a Method A initiation. The Hub sees the user's submission and immediately calls `ContestRedemption` with the **exact same effective state**. The Federation interprets this as explicit, real-time consent, bypasses the remainder of the challenge window, and proceeds directly to adjudication.
 -   **Do Nothing**: If the counterparty is offline or does not contest, the challenge window expires.
 
 **4. Federation Adjudicates & Liquidates**
 -   **Action**: Once the challenge window is closed (either by expiring or by being accelerated), the Federation makes a final decision based on the valid submitted state with the highest sequence number.
--   **Settlement**: The Federation liquidates the entire channel balance based on the final adjudicated state, sending funds to the user's L1 address and the Hub's internal account.
+-   **Settlement**: The Federation liquidates the entire channel balance based on the final adjudicated state.
+-   **Fee Handling**: The estimated L1 transaction fee for the payout is deducted from the final balances of the User and the Hub, proportional to their share of the redeemed funds. The Federation sends the remaining amounts to the user's L1 address and the Hub's internal account.
 
 **5. Parties Poll for Final Outcome**
 -   **Action**: Both parties can poll the `GetRedemptionConfirmation` endpoint using any `reconciliation_hash` involved in the attempt to learn the final outcome (`COMPLETED` or `REJECTED`).
@@ -251,19 +261,24 @@ The counterparty is expected to be monitoring the Federation. During the challen
 
 ### 7.1. Case 1: Invalid Redemption Request
 - **Scenario**: A party submits a `RedemptionRequest` with invalid signatures or transactions.
-- **Outcome**: The Federation's validation of the "effective state" will fail. It rejects the request immediately.
+- **Outcome**: The Federation's validation of the "effective state" will fail. It rejects the request immediately with a `REJECTED` status.
 
-### 7.2. Case 2: Party Submits Outdated State
+### 7.2. Case 2: Transaction Log Too Large
+- **Scenario**: A party submits a `RedemptionRequest` where the `subsequent_transactions` list exceeds `MAX_SUBSEQUENT_TRANSACTIONS_PER_REQUEST`.
+- **Outcome**: The Federation rejects the request immediately with a `REJECTED` status and an error indicating the transaction limit was exceeded. This prevents DoS attacks.
+
+### 7.3. Case 3: Party Submits Outdated State
 - **Scenario**: A party submits a `RedemptionRequest` with an old state, and the counterparty successfully contests it with a newer one.
-- **Outcome**: The Federation will adjudicate in favor of the counterparty. The channel will be liquidated based on the newer state. The party that submitted the outdated state may be penalized.
+- **Outcome**: The Federation will adjudicate in favor of the counterparty. The channel will be liquidated based on the newer state. The party that submitted the outdated state may be penalized according to Federation policy.
 
 ### 7.4. Case 4: Duplicate Redemption Request
-- **Scenario**: A party submits a `RedemptionRequest` with a `(channel_id, sequence_number)` tuple that has already been processed and adjudicated.
-- **Outcome**: The Federation MUST persist the `(channel_id, sequence_number)` tuple for every successfully processed and adjudicated `RedemptionRequest`. Any subsequent `RedemptionRequest` with an identical `(channel_id, sequence_number)` tuple MUST be rejected with a deterministic error indicating a duplicate request. This prevents replay attacks and ensures the uniqueness of each redemption authorization.
+- **Scenario**: A party submits a `RedemptionRequest` for a channel where a state with the same or lower sequence number has already been submitted in a *previous* `SubmitRedemption` call.
+- **Outcome**: The Federation MUST maintain a persistent record of the highest sequence number submitted for any given channel (`channel_id`). Any new `SubmitRedemption` request for that channel MUST have an effective state with a strictly higher sequence number. If not, it is rejected as a duplicate or outdated request. This prevents replay attacks and ensures forward progress.
 
-### 7.3. Case 3: Federation L1 Transaction Fails
+### 7.5. Case 5: Federation L1 Transaction Fails
 - **Scenario**: The Federation's L1 redemption transaction fails to broadcast or confirm.
-- **Outcome**: The Federation's internal system is responsible for retrying. The `RedemptionConfirmation` will not be made available until the L1 transaction is secure. A polling party would continue to receive a "pending" status.
+- **Outcome**: The Federation's internal system is responsible for retrying. The `RedemptionConfirmation` will not be made available until the L1 transaction is secure. A polling party would continue to receive a `PENDING` status.
+
 ## 8. Federation Redemption State Management
 
 To ensure all redemption flows are handled robustly, transparently, and can be audited, the Federation MUST implement a state management system based on the following principles and data structures.
@@ -331,7 +346,8 @@ To ensure any valid `reconciliation_hash` can be used to find the current state 
 
 #### 1. Initiation (`SubmitRedemption`)
 
--   The Federation calculates the **"effective state"** from the request's `last_co_signed_state` and `subsequent_transactions`.
+-   The Federation calculates the **"effective state"** from the request's `last_co_signed_state` and `subsequent_transactions`, after validating the transaction count against the limit.
+-   It checks against a persistent store of processed channels to ensure the effective state's sequence number is strictly greater than any previously adjudicated state for this channel. If not, the request is rejected.
 -   The hash of this effective state becomes the `primary_identifier` for a new `RedemptionAttempt` record.
 -   The first `StateHistoryEntry` is created and added to `state_history`.
 -   The `latest_state_hash` is set to the `primary_identifier`.
@@ -341,11 +357,13 @@ To ensure any valid `reconciliation_hash` can be used to find the current state 
 #### 2. Contestation (`ContestRedemption`)
 
 -   A party provides a `reconciliation_hash` to contest. The Federation uses the index to find the `RedemptionAttempt`.
--   The Federation validates the `newer_state`. If it has a higher sequence number:
+-   The Federation validates the `newer_state`. Its sequence number MUST be strictly greater than the sequence number of the state associated with the current `latest_state_hash`.
+-   If the new state is valid and superior:
     -   A new `StateHistoryEntry` is added to the `state_history` log.
     -   The `latest_state_hash` in the `RedemptionAttempt` record is updated to the hash of the `newer_state`.
     -   The `challenge_deadline` is reset.
     -   A new entry is added to the `reconciliation_hash_index`, mapping the new hash to the same `primary_identifier`.
+-   If the new state's sequence number is not strictly greater, the contest is rejected. This prevents griefing attacks.
 
 #### 3. Polling (`GetRedemptionConfirmation`)
 
@@ -361,3 +379,4 @@ To ensure any valid `reconciliation_hash` can be used to find the current state 
 
 -   When the `challenge_deadline` is closed (expires or is accelerated), the Federation uses the state corresponding to the `latest_state_hash` for final liquidation.
 -   Upon successful L1 confirmation, the Federation updates the `RedemptionAttempt` `status` to `COMPLETED` and populates the `l1_transaction_id`.
+-   The `(channel_id, final_sequence_number)` tuple is persisted to prevent any future redemption attempts on this channel with an equal or lesser sequence number.
