@@ -41,3 +41,6 @@
 
 ## Compliance
 <Compliance validation>
+
+# Restrictions
+- make commits only after successfully executing the demo (if it is in the task) or after successfully passing the tests (if they are provided for by the task)
