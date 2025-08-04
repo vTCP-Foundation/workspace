@@ -2,6 +2,9 @@
 
 _v0.1, 2025-06-30_
 
+# todo
+- add a verification mechanism for the federation to prevent a hub from creating more channel obligations than its actual L1 stake.
+
 ## 1. Overview
 
 This document provides a detailed technical specification for the **Issuance Process (Flow 1)** of the [BTC ⟷ vTCP Custody Protocol](/architecture/btc-federation/protocols/BTC%20<->%20vTCP%20Custody%20Protocol.md). This process covers both the creation of new channels and the topping-up of existing ones.
