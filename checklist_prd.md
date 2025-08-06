@@ -1,4 +1,4 @@
-# PRD Authoring Checklist
+# PRD Flow Checklist
 
 This checklist outlines the standard procedure for creating a Product Requirements Document (PRD). Following these steps ensures that PRDs are comprehensive, well-contextualized, and aligned with project policies before development work begins.
 
@@ -25,3 +25,25 @@ This checklist outlines the standard procedure for creating a Product Requiremen
 ### 4. Validate the PRD with AI
 - **Action:** Use the `prompts/prd_validation_prompt.md` to validate the PRD against all project requirements.
 - **Requirement:** To ensure a robust and unbiased review, the validation must be performed using at least **two different advanced AI models** (e.g., Gemini, Claude, etc.). This cross-validation helps identify a wider range of potential issues and ensures the PRD is clear and comprehensive.
+
+
+## Phase 3: Review and Approval
+В цій фазі команда архітектів 
+
+
+## Phase 4: Tasks decomposition
+
+
+## Phase 5: Tasks implementation
+
+
+## Phase 6: Tests planning and implementation
+
+
+## Phase 7: Documentation update
+
+
+## Phase 8: Framework reflection (what can be improved)
+
+
+## Phase 9: PRD Merge

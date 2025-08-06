@@ -16,7 +16,7 @@
 <Testing requirements for the task>
 
 # Verification and Validation
-<User approval that validation criteria appropriate to task complexity have been met>
+<Architect approval that validation criteria appropriate to task complexity have been met>
 
 ## Architecture integrity
 <Verification of architectural compliance>
