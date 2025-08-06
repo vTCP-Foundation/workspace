@@ -2,14 +2,18 @@
 
 ## Document Information
 - **Project Name**: [Project Name]
+- **PRD ID**: [Unique PRD identifier]
 - **Phase/Iteration**: [Phase 1, Sprint 5, v2.1, etc.]
 - **Document Version**: 1.0
 - **Date**: [Date]
 - **Author(s)**: [Author Name(s)]
 - **Stakeholders**: [List key stakeholders]
-- **Status**: Draft | In Review | Approved | Active
+- **PRD Status**: [Phase.Step] - [Description] 
+- **Last Status Update**: [Date]
 - **Previous PRD**: [Link to previous iteration's PRD]
 - **Related Documents**: [Links to master project vision, architecture docs]
+
+> **Workflow Reference**: For complete phase descriptions and status transitions, see **"Feature Development Workflow"** section in [policy.md](policy.md). This document follows the 9-phase workflow with numbered steps (1.1 through 9.3) for precise status tracking.
 
 ## Executive Summary
 Brief overview of this iteration, its purpose, and expected outcomes. Include:

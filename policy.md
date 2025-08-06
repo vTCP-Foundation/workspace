@@ -4,6 +4,12 @@ This policy provides a single, authoritative, machine-readable source of truth f
 
 It aims to eliminate ambiguity, reduce supervision needs, and facilitate automation while maintaining accountability and compliance with best practices.
 
+## Quick Navigation for PRD Workflow
+- **Feature Development Workflow**: See section starting at line ~33 for complete 9-phase process (1.1-9.3)
+- **PRD Template**: [template_prd.md](template_prd.md)
+- **Task Template**: [template_task.md](template_task.md)
+- **PRD Validation Prompt**: [prompts/prd_validation_prompt.md](prompts/prd_validation_prompt.md)
+
 
 # Introduction
 > **Rationale:** Sets the context, actors, and compliance requirements for the policy, ensuring all participants understand their roles and responsibilities.
@@ -32,62 +38,178 @@ It aims to eliminate ambiguity, reduce supervision needs, and facilitate automat
 
 ### Feature Development Workflow
 
-#### Phase 1: PRD Planning and Preparation
-1. **PRD Creation**: Create PRD using [Template PRD](/template_prd.md)
-2. **PRD Validation**: Validate PRD with [PRD validation prompt](/prompts/prd_validation_prompt.md)
-3. **PRD Decomposition**: Break down PRD into tasks using [Template Task](/template_task.md)
-4. **Task Complexity Assessment**: Determine validation criteria level for each task (Simple/Moderate/Complex) as per "Task Validation Criteria Proportionality"
-5. **Architect Approval**: Get explicit Architect approval for the complete task list and validation criteria before proceeding
+#### Phase 1: PRD Creation and Initial Planning
+**1.1 PRD File Creation**
+- Create PRD using [Template PRD](/template_prd.md)
+- Location: `workflow/prd/<project-name>/<PRD-ID>-<SHORT-NAME>.md`
+- Add PRD status tracking header with current phase
+- Update PRD status to `1.1 - PRD file created`
 
-#### Phase 2: Individual Task Implementation (Repeat for Each Task)
+**1.2 Initial Brain Dump**  
+- Architect performs content creation without AI assistance
+- Preserve critical context and decision rationale
+- Document all known requirements and constraints
+- Update PRD status to `1.2 - Initial brain dump complete`
 
-**Step 1: Pre-Implementation Setup**
-- **Task Selection**: Agent identifies next task from approved task list
-- **Scope Verification**: Confirm task scope aligns with PRD and no scope creep
-- **Branch Creation**: Create or use PRD-dedicated feature branch named `prd/<PRD-ID>-<short-description>`. Before creation check if the branch already exists. If it does, then use that branch
-- **Implementation Plan Review**: Review and confirm implementation approach with Architect if needed
+**1.3 Supporting Materials Linking**
+- Link relevant code files, ADRs, related PRDs
+- Embed supporting documentation references
+- Update PRD status to `1.3 - Supporting materials linked`
 
-**Step 2: Core Implementation**
-- **Code Implementation**: Execute task requirements strictly within defined scope
-- **Documentation Updates**: Update any required technical documentation inline with changes
-- **Implementation Documentation**: Document any deviations from planned approach in task file
+#### Phase 2: Validation and Refinement
+**2.1 Multi-Model PRD Validation**
+- Use [PRD validation prompt](/prompts/prd_validation_prompt.md)
+- Require minimum two different advanced AI models for cross-validation
+- Update PRD status to `2.1 - Multi-model validation complete`
 
-**Step 3: Demo Creation and Validation**
-> **Critical Gate**: No code commits or test implementation shall proceed until demo is validated
+**2.2 PRD Content Refinement**
+- Address validation feedback
+- Resolve identified gaps or ambiguities
+- Update PRD status to `2.2 - Content refinement complete`
 
-- **Demo Creation**: Agent creates a demonstration that proves the implemented functionality works as expected and covers ALL task requirements
-  - **Demo Purpose**: The demo serves as immediate, tangible proof that implementation meets requirements before investing time in formal testing
-  - **Demo Types**: Choose appropriate format based on task complexity:
-    - Simple tasks: Basic script or command demonstration
-    - Moderate tasks: Interactive demonstration or test harness
-    - Complex tasks: Comprehensive walkthrough covering all integration points
-  - **Demo Scope**: Must demonstrate ALL requirements and DOD criteria listed in task
-  - **Demo Documentation**: Include clear instructions for Architect to reproduce demo results
+**2.3 Validation Feedback Integration**
+- Incorporate final validation improvements
+- Update PRD status to `2.3 - Ready for architect review`
 
-- **Architect Demo Validation**: Architect reviews and approves demo
-  - **Validation Criteria**: Demo must prove all task requirements are met
-  - **Failure Protocol**: If demo fails, Agent must fix implementation before proceeding
-  - **Scope Validation**: Confirm no scope creep occurred during implementation
+#### Phase 3: Review and Approval
+**3.1 Architect Team Review**
+- Architect team reviews PRD comprehensively
+- May iterate back to any Phase 2 step if needed
+- Update PRD status to `3.1 - Under architect review`
 
-**Step 4: Test Implementation**
-- **Test Development**: Implement automated tests according to task's test plan
-- **Test Scope**: Tests must align with task complexity level and validation criteria
-- **Test Coverage**: Ensure tests cover all functionality demonstrated in the demo
-- **Test Documentation**: Update test documentation and ensure tests are properly integrated
+**3.2 Review Feedback Integration**
+- Address architect feedback
+- Make required PRD modifications
+- Update PRD status to `3.2 - Review feedback integrated`
 
-**Step 5: Final Validation and Integration**
-- **Architect Test Validation**: Architect reviews and approves implemented tests
-- **Validation Criteria Check**: Confirm all proportional validation criteria are met
-- **ADR Synchronization**: Update Architecture Decision Records if implementation required architectural decisions
-- **Final Documentation**: Complete any remaining documentation updates
+**3.3 Final PRD Approval**
+- Get explicit architect approval
+- Update PRD status to `3.3 - Approved for context analysis`
 
-**Step 6: Version Control Integration**
-- **Commit Creation**: Create commits with proper format `[<PRD-ID>-<TASK-ID>] <description>`
-- **Pull Request Decision**: 
-  - If current task is the last task in the PRD: Create PR with PRD linkage and implementation summary for all tasks
-  - If current task is NOT the last task in the PRD: Only create commit (no PR)
-- **Architect PR Review**: Architect approves pull request (only if PR was created)
-- **Merge to Main**: Complete merge using squash merge strategy (only if PR was created)
+#### Phase 4: Context Analysis and Task Planning  
+**4.1 Codebase Analysis and Context Gathering**
+- Agent analyzes codebase for relevant components
+- Gather references to files/systems requiring changes
+- Update PRD status to `4.1 - Context analysis complete`
+
+**4.2 PRD Context Updates**
+- Update PRD with gathered technical context
+- Add component references and dependencies
+- Update PRD status to `4.2 - Context integrated`
+
+**4.3 Task Decomposition**
+- Break down PRD using [Template Task](/template_task.md)
+- Follow task criteria: Agent-oriented language, demo-enabled, concise (≤150k tokens)
+- Exclude test implementation (tests created only after task validation)
+- Include ADR references where applicable
+- Identify parallel execution opportunities
+- Update PRD status to `4.3 - Tasks decomposed`
+
+**4.4 Task Complexity Assessment**
+- Assign complexity level (Simple/Moderate/Complex) per "Task Validation Criteria Proportionality"
+- Define proportional validation criteria for each task
+- Update PRD status to `4.4 - Complexity assessed`
+
+**4.5 Task List Architect Approval**
+- Get explicit approval for complete task list and validation criteria
+- Confirm task scope and parallel execution plan
+- Update PRD status to `4.5 - Approved for implementation`
+
+#### Phase 5: Task Implementation (Repeat per Task)
+**5.1 Individual Task Execution**
+- **Pre-Implementation Setup**:
+  - Create or use PRD-dedicated feature branch `prd/<PRD-ID>-<short-description>`
+  - Verify task scope aligns with PRD (no scope creep)
+  - Review implementation approach with Architect if needed
+- **Core Implementation**:
+  - Execute task requirements strictly within defined scope
+  - Update required technical documentation inline with changes
+  - Document any deviations from planned approach in task file
+- Update PRD status to `5.1 - Task [X] implementation complete`
+
+**5.2 Demo Creation and Validation** 
+> **Critical Gate**: No commits or test implementation proceed until demo is validated
+
+- **Demo Creation**: Create demonstration proving task completion
+  - Demo Types: Basic script (Simple), Interactive demo (Moderate), Comprehensive walkthrough (Complex)
+  - Must demonstrate ALL requirements and DOD criteria
+  - Include clear reproduction instructions for Architect
+- **Architect Demo Validation**: 
+  - Demo must prove all task requirements are met
+  - If demo fails: return to 5.1 for implementation fixes
+  - Confirm no scope creep occurred
+- Update PRD status to `5.2 - Task [X] demo validated`
+
+**5.3 Commit Creation**
+- **Test Implementation**: Develop tests according to task's test plan (aligned with complexity level)
+- **Final Validation**: Architect reviews and approves tests and validation criteria
+- **ADR Updates**: Update Architecture Decision Records if needed
+- **Commit Creation**: Create commits with format `[<PRD-ID>-<TASK-ID>] <description>`
+- Update PRD status to `5.3 - Task [X] committed`
+
+#### Phase 6: Testing Implementation
+**6.1 Test Planning**
+- Plan comprehensive testing for all implemented logic
+- Target 100% coverage of modified functionality
+- Prioritize quality over quantity (redundant coverage acceptable)
+- Update PRD status to `6.1 - Test planning complete`
+
+**6.2 Test Implementation**
+- Implement tests for all tasks and components
+- Ensure tests cover all functionality demonstrated in demos
+- Update PRD status to `6.2 - Tests implemented`
+
+**6.3 Test Validation**
+- Architect validates test coverage and quality
+- Update PRD status to `6.3 - Tests validated`
+
+#### Phase 7: Documentation and Integration
+**7.1 Documentation Updates**
+- Update all relevant documentation (ADRs, technical docs)
+- Ensure documentation matches implementation
+- Address any new aspects discovered during implementation
+- Update PRD status to `7.1 - Documentation updated`
+
+**7.2 ADR Synchronization**
+- Update Architecture Decision Records as needed
+- Document any new architectural decisions
+- Update PRD status to `7.2 - ADRs synchronized`
+
+**7.3 Final Documentation Review**
+- Architect reviews all documentation updates
+- Ensure current project documentation is complete
+- Update PRD status to `7.3 - Documentation approved`
+
+#### Phase 8: Process Reflection
+**8.1 Workflow Analysis**
+- Architect team analyzes completed workflow
+- Identify process strengths and weaknesses
+- Update PRD status to `8.1 - Workflow analyzed`
+
+**8.2 Improvement Identification**
+- Document specific improvement opportunities
+- Prioritize workflow enhancements for future PRDs
+- Update PRD status to `8.2 - Improvements identified`
+
+**8.3 Framework Updates**
+- Update policy/templates based on learnings
+- Document changes for future PRD workflows
+- Update PRD status to `8.3 - Framework updated`
+
+#### Phase 9: Final Integration
+**9.1 Pull Request Creation**
+- Create PR with PRD linkage and implementation summary for all tasks
+- Include all commits from PRD implementation
+- Update PRD status to `9.1 - PR created`
+
+**9.2 Final Architect Review**
+- Final comprehensive review of all changes
+- Approve pull request for merge
+- Update PRD status to `9.2 - Final review complete`
+
+**9.3 Merge to Main Branch**
+- Complete merge using squash merge strategy
+- Update PRD status to `9.3 - Merged to main - COMPLETE`
 
 ### Testing-Focused Development Workflow
 
