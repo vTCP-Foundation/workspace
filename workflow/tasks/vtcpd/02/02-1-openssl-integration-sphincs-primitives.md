@@ -4,13 +4,13 @@
 - [PRD-02: SPHINCS+ Cryptography Implementation](../../prd/vtcpd/02_sphincs_plus_cryptography_implementation.md)
 
 # Description
-Integrate OpenSSL 3.0.8+ into the VTCPD project and implement SPHINCS+ cryptographic primitives (PrivateKey, PublicKey, and Signature classes) in the crypto namespace. This task establishes the foundation for migrating from Lamport to SPHINCS+ signature scheme using the deterministic variant (EVP_SIGNATURE-SLH-DSA-SHA2-256s).
+Integrate OpenSSL 3.5+ into the VTCPD project and implement SPHINCS+ cryptographic primitives (PrivateKey, PublicKey, and Signature classes) in the crypto namespace. This task establishes the foundation for migrating from Lamport to SPHINCS+ signature scheme using the deterministic variant (EVP_SIGNATURE-SLH-DSA-SHA2-256s).
 
 # Requirements and DOD
 
 ## Requirements
-1. **OpenSSL 3.0.8+ Integration**:
-   - Add OpenSSL 3.0.8+ as a project dependency in CMakeLists.txt
+1. **OpenSSL 3.5+ Integration**:
+   - Add OpenSSL 3.5+ as a project dependency in CMakeLists.txt
    - Configure build system to link against OpenSSL libraries
    - Verify EVP_SIGNATURE-SLH-DSA-SHA2-256s algorithm availability
    - Ensure no conflicts with existing dependencies
@@ -43,7 +43,7 @@ Integrate OpenSSL 3.0.8+ into the VTCPD project and implement SPHINCS+ cryptogra
    - Follow cryptographic best practices for key handling
 
 ## Definition of Done (DOD)
-- [ ] OpenSSL 3.0.8+ successfully integrated and building without errors
+- [ ] OpenSSL 3.5+ successfully integrated and building without errors
 - [ ] EVP_SIGNATURE-SLH-DSA-SHA2-256s algorithm functional and accessible
 - [ ] All three SPHINCS+ primitive classes implemented and documented
 - [ ] Comprehensive unit tests written and passing for all classes
@@ -57,7 +57,7 @@ Integrate OpenSSL 3.0.8+ into the VTCPD project and implement SPHINCS+ cryptogra
 
 ## Phase 1: OpenSSL Integration (Week 1, Days 1-3)
 1. **Build System Updates**:
-   - Modify `src/core/crypto/CMakeLists.txt` to include OpenSSL 3.0.8+ dependency
+   - Modify `src/core/crypto/CMakeLists.txt` to include OpenSSL 3.5+ dependency
    - Add FindOpenSSL module configuration if needed
    - Update project-level CMakeLists.txt for OpenSSL linking
    - Verify build system can locate and link OpenSSL libraries
@@ -115,14 +115,14 @@ Integrate OpenSSL 3.0.8+ into the VTCPD project and implement SPHINCS+ cryptogra
 Verify that OpenSSL integration and SPHINCS+ primitives work correctly, securely, and deterministically as required for the cryptographic migration.
 
 ## Test Scope
-- OpenSSL 3.0.8+ integration and build system
+- OpenSSL 3.5+ integration and build system
 - SPHINCS+ PrivateKey, PublicKey, and Signature classes
 - Deterministic signature behavior
 - Memory management and security
 - Error handling and edge cases
 
 ## Environment & Setup
-- Development environment with OpenSSL 3.0.8+ available
+- Development environment with OpenSSL 3.5+ available
 - C++ testing framework (existing project test infrastructure)
 - Memory testing tools (valgrind or equivalent)
 - Test build targets in CMake
@@ -215,7 +215,7 @@ Verify that OpenSSL integration and SPHINCS+ primitives work correctly, securely
 
 ## Compliance
 - Verify implementation follows NIST Post-Quantum Cryptography standards
-- Confirm adherence to OpenSSL 3.0+ API best practices
+- Confirm adherence to OpenSSL 3.5+ API best practices
 - Validate compliance with project security and coding policies
 
 # Restrictions

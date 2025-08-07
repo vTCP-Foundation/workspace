@@ -9,12 +9,12 @@
 - **Stakeholders**: Core Development Team, Security Team
 - **Status**: Draft
 - **Previous PRD**: N/A
-- **Related Documents**: [Architecture docs], [OpenSSL documentation]
+- **Related Documents**: [ADR-004: SPHINCS+ Signature Scheme Adoption](../../architecture/btc-federation/ADR-004-sphincs-signature-scheme.md)
 
 ## Executive Summary
 Brief overview of this iteration, its purpose, and expected outcomes. Include:
 - **Current project state**: VTCPD currently uses Lamport one-time signature scheme for cryptographic operations in trust lines and payment transactions
-- **This iteration's focus**: Replace Lamport signature scheme with SPHINCS+ post-quantum signature scheme using OpenSSL 3.0+ deterministic variant
+- **This iteration's focus**: Replace Lamport signature scheme with SPHINCS+ post-quantum signature scheme using OpenSSL 3.5+ deterministic variant
 - **Connection to overall vision**: This implementation enhances security posture, improves performance, and simplifies key management while maintaining post-quantum cryptographic security
 
 ## Iteration Context
@@ -57,10 +57,10 @@ Define how success will be measured:
 ## Project Scope
 ### This Iteration's Scope
 #### New Features/Enhancements
-- **OpenSSL 3.0+ Integration**: Add OpenSSL 3.0.8+ dependency with SPHINCS+ SLH-DSA-SHA2-256s support (OpenSSL NID = EVP_SIGNATURE-SLH-DSA-SHA2-256s)
+- **OpenSSL 3.5+ Integration**: Add OpenSSL 3.5+ dependency with SPHINCS+ SLH-DSA-SHA2-256s support (OpenSSL NID = EVP_SIGNATURE-SLH-DSA-SHA2-256s)
 - **SPHINCS+ Deterministic Primitives**: Implement PrivateKey, PublicKey, and Signature classes for deterministic SPHINCS+ scheme
 - **Simplified Key Management**: Replace multi-key architecture with single key per trust line
-- **Database Schema Updates**: Remove `number` and `is_valid` fields from key-related tables
+- **Database Schema Updates**: Remove `number` and `is_valid` fields from key-related tables while preserving `keys_set_sequence_number` field
 
 #### Bug Fixes & Technical Improvements
 - **Key Exhaustion Prevention**: Eliminate one-time key limitation issues
@@ -71,7 +71,7 @@ Define how success will be measured:
 - **Keychain Methods**: Update all signing and verification methods in `keychain.h/cpp` to use SPHINCS+
 - **Trust Line Transactions**: Remove KeyNumber parameters from all trust line operations
 - **Payment Transactions**: Remove KeyNumber parameters from payment-related operations
-- **Database Handlers**: Update SQLite and PostgreSQL handlers to simplified schema
+- **Database Handlers**: Update SQLite and PostgreSQL handlers to simplified schema (remove `number` and `is_valid` fields, preserve `keys_set_sequence_number`)
 
 ### Explicitly Out of Scope
 - Data migration from existing systems (project not in production)
@@ -107,13 +107,13 @@ This implementation establishes a modern cryptographic foundation that simplifie
 
 ### Functional Requirements
 #### New Features for This Iteration
-1. **OpenSSL 3.0+ Integration with Deterministic SPHINCS+**
-   - **Description**: Integrate OpenSSL 3.0+ with deterministic SPHINCS+ SLH-DSA-SHA2-256s algorithm
-   - **User Story**: As a developer, I want to use industry-standard OpenSSL library with deterministic SPHINCS+ for consistent, reproducible signatures
+1. **OpenSSL 3.5+ Integration with Deterministic SPHINCS+**
+   - **Description**: Integrate OpenSSL 3.5+ with deterministic SPHINCS+ SLH-DSA-SHA2-256s algorithm
+   - **User Story**: As a developer, I want to use industry-standard OpenSSL 3.5+ library with deterministic SPHINCS+ for consistent, reproducible signatures
    - **Rationale**: Deterministic variant ensures reproducible signatures for the same input and key, which is important for system consistency
    - **Builds Upon**: Current crypto namespace structure
    - **Acceptance Criteria**: 
-     - OpenSSL 3.0.8+ successfully integrated into build system
+     - OpenSSL 3.5+ successfully integrated into build system
      - EVP_SIGNATURE-SLH-DSA-SHA2-256s algorithm available and functional
      - Deterministic variant properly configured
      - No conflicts with existing dependencies
@@ -163,6 +163,7 @@ This implementation establishes a modern cryptographic foundation that simplifie
    - **Proposed Changes**: 
      - Remove `number` field from all key-related tables
      - Remove `is_valid` field from all key-related tables
+     - Preserve `keys_set_sequence_number` field for key set versioning
      - Simplify primary key constraints
      - Update indexes for single-key lookup
    - **Impact Assessment**: Simplified database schema
@@ -208,17 +209,17 @@ This implementation establishes a modern cryptographic foundation that simplifie
 
 ### Technology Stack Updates
 #### New Technologies/Libraries
-- **OpenSSL 3.0.8+**: Core cryptographic library providing deterministic SPHINCS+ implementation
+- **OpenSSL 3.5+**: Core cryptographic library providing deterministic SPHINCS+ implementation
 - **Specific Algorithm (OpenSSL NID)**: EVP_SIGNATURE-SLH-DSA-SHA2-256s (deterministic variant)
 - **Integration approach**: Use OpenSSL EVP interface for SPHINCS+ operations
 
 #### Version Updates
-- **OpenSSL**: Not currently used → OpenSSL 3.0+
-- **Impact**: New dependency, build system updates required
+- **OpenSSL**: Not currently used → OpenSSL 3.5+
+- **Impact**: New dependency, build system updates required, minimum version 3.5+ for SPHINCS+ support
 
 ### Integration Requirements
 #### New Integrations
-- **OpenSSL 3.0+**: Direct integration for deterministic SPHINCS+ cryptographic operations
+- **OpenSSL 3.5+**: Direct integration for deterministic SPHINCS+ cryptographic operations
 
 #### Modified Integrations
 - **Database layer**: Updated to handle simplified single-key schema
@@ -251,7 +252,7 @@ This implementation establishes a modern cryptographic foundation that simplifie
 ### Iteration Milestones
 | Milestone | Date | Description | Dependencies | Risk Level |
 |-----------|------|-------------|--------------|------------|
-| OpenSSL Integration | Week 1 | OpenSSL 3.0+ integrated with deterministic SPHINCS+ | Build system | Low |
+| OpenSSL Integration | Week 1 | OpenSSL 3.5+ integrated with deterministic SPHINCS+ | Build system | Low |
 | SPHINCS+ Primitives | Week 2 | Core cryptographic classes implemented | OpenSSL integration | Medium |
 | Database Schema Update | Week 3 | Schema simplified, handlers updated | SPHINCS+ primitives | Medium |
 | Keychain Implementation | Week 4 | All keychain methods updated | Database changes | Medium |
@@ -363,7 +364,7 @@ Not applicable - direct replacement approach
 - **EVP Interface**: OpenSSL's high-level cryptographic interface
 
 ### References
-- OpenSSL 3.0+ SPHINCS+ documentation
+- OpenSSL 3.5+ SPHINCS+ documentation
 - EVP_SIGNATURE-SLH-DSA-SHA2-256s specification
 - SPHINCS+ deterministic variant documentation
 - NIST Post-Quantum Cryptography Standardization (FIPS 203 Draft – SPHINCS+)
@@ -388,4 +389,5 @@ Updated documentation for:
 **Related Documents**
 - **Master Project Vision**: [Link to overall VTCPD vision]
 - **Technical Architecture**: [Link to current architecture docs]
+- **Architecture Decision Record**: [ADR-004: SPHINCS+ Signature Scheme Adoption](../../architecture/btc-federation/ADR-004-sphincs-signature-scheme.md)
 - **OpenSSL Integration Guide**: [Link to integration documentation]

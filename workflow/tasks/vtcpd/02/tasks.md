@@ -12,19 +12,35 @@ This PRD involves replacing the Lamport one-time signature scheme with SPHINCS+ 
 - **Dependencies**: Build system, CMakeLists.txt
 - **Estimated Duration**: 2 weeks
 
-### Task 02-2: Keychain Migration to SPHINCS+
-- **File**: `02-2-keychain-migration-to-sphincs.md`
-- **Complexity**: Complex
-- **Description**: Migrate keychain.h/cpp to use SPHINCS+ scheme, remove KeyNumber and is_valid fields from database schema and methods, implement single-key architecture
+### Task 02-2: Keychain Classes Migration to SPHINCS+
+- **File**: `02-2-keychain-classes-migration-to-sphincs.md`
+- **Complexity**: Moderate
+- **Description**: Migrate keychain.h/cpp classes to use SPHINCS+ scheme instead of Lamport, update method signatures and implementations
 - **Dependencies**: Task 02-1 (SPHINCS+ primitives must be completed first)
-- **Estimated Duration**: 2-3 weeks
+- **Estimated Duration**: 1 week
+
+### Task 02-3: Remove Lamport Cryptography Code
+- **File**: `02-3-remove-lamport-cryptography-code.md`
+- **Complexity**: Simple
+- **Description**: Remove all Lamport-related code, classes, and dependencies from the project
+- **Dependencies**: Task 02-2 (Keychain migration must be completed first)
+- **Estimated Duration**: 2-3 days
+
+### Task 02-4: Database Schema Simplification
+- **File**: `02-4-database-schema-simplification.md`
+- **Complexity**: Moderate
+- **Description**: Remove `number` and `is_valid` fields from key-related tables while preserving `keys_set_sequence_number` field
+- **Dependencies**: Task 02-2 (Keychain migration must be completed first)
+- **Estimated Duration**: 1 week
 
 ## Task Dependencies
 ```
 02-1 (OpenSSL + SPHINCS+ Primitives)
   ↓
-02-2 (Keychain Migration)
+02-2 (Keychain Classes Migration)
+  ↓
+02-3 (Remove Lamport Code) & 02-4 (Database Schema Simplification)
 ```
 
 ## Total Estimated Timeline
-4-5 weeks for both tasks with dependencies
+5-6 weeks for all tasks with dependencies

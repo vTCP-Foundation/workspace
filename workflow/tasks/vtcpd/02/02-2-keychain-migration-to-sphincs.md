@@ -1,11 +1,11 @@
-# 02-2 - Keychain Migration to SPHINCS+
+# 02-2 - Keychain Classes Migration to SPHINCS+
 
 # Links
 - [PRD-02: SPHINCS+ Cryptography Implementation](../../prd/vtcpd/02_sphincs_plus_cryptography_implementation.md)
 - [Task 02-1: OpenSSL Integration and SPHINCS+ Primitives](./02-1-openssl-integration-sphincs-primitives.md)
 
 # Description
-Migrate the keychain implementation from Lamport signature scheme to SPHINCS+ deterministic signatures. This involves updating keychain.h/cpp to use SPHINCS+ primitives, removing KeyNumber and is_valid fields from database schema and methods, implementing single-key architecture, and updating all classes that interact with the keychain system.
+Migrate the keychain classes (`TrustLineKeychain` and `Keystore`) from Lamport signature scheme to SPHINCS+ deterministic signatures. This task focuses specifically on updating keychain.h/cpp to use SPHINCS+ primitives, implementing single-key architecture, updating method signatures to remove KeyNumber parameters, and updating database handler interfaces to work with SPHINCS+ types.
 
 # Requirements and DOD
 
@@ -13,224 +13,137 @@ Migrate the keychain implementation from Lamport signature scheme to SPHINCS+ de
 1. **Keychain Class Updates**:
    - Replace all Lamport signature usage in `TrustLineKeychain` class with SPHINCS+ primitives
    - Update `Keystore` class to use SPHINCS+ for payment transactions
-   - Remove all KeyNumber parameters from keychain methods
+   - Replace `#include "lamportscheme.h"` with `#include "sphincsscheme.h"` in keychain.h
+   - Update all method signatures to remove KeyNumber parameters
    - Implement single-key architecture (one key pair per trust line)
    - Update all signing methods: `sign()`, `checkSign()`, `saveOutgoingPaymentReceipt()`, `saveIncomingPaymentReceipt()`, `saveFullAudit()`, etc.
 
-2. **Database Schema Simplification**:
-   - Remove `number` field from all key-related tables (both SQLite and PostgreSQL)
-   - Remove `is_valid` field from all key-related tables (both SQLite and PostgreSQL)
-   - Update primary key constraints for simplified schema
-   - Modify database handler classes to work with single-key lookup
-   - Update indexes for optimized single-key access patterns
+2. **Method Signature Updates**:
+   - Remove KeyNumber parameters from all keychain method signatures
+   - Update return types from `pair<Signature, KeyNumber>` to just `Signature`
+   - Simplify key retrieval methods to work with single key per trust line
+   - Update method implementations to use SPHINCS+ primitives instead of Lamport
 
-3. **Database Handler Updates**:
-   - Update `OwnKeysHandler` (SQLite and PostgreSQL) to remove KeyNumber-related methods
-   - Update `ContractorKeysHandler` (SQLite and PostgreSQL) to remove KeyNumber-related methods
-   - Remove methods: `keyByNumber()`, `getKeyNumberByHash()`, `getPublicKeyHash()` with KeyNumber parameter
-   - Simplify key storage and retrieval to single key per trust line
-   - Update key invalidation logic to work without is_valid field
-
-4. **Trust Line Transaction Updates**:
-   - Remove KeyNumber parameters from all trust line transaction classes
-   - Update transaction classes in `src/core/transactions/transactions/trust_lines/` directory
-   - Modify audit, receipt, and signing logic to work with single-key architecture
-   - Update serialization/deserialization to exclude KeyNumber fields
-
-5. **Payment Transaction Updates**:
-   - Remove KeyNumber parameters from payment transaction classes
-   - Update transaction classes in `src/core/transactions/transactions/regular/payments/` directory
-   - Modify payment signing and verification logic for single-key approach
-   - Update all payment-related cryptographic operations
-
-6. **Key Management Simplification**:
+3. **Key Management Logic Simplification**:
    - Remove key set generation logic (no more multiple keys per trust line)
    - Remove key availability counting and exhaustion checks
    - Simplify key rotation and regeneration logic
    - Update audit conditions to work without key counting
+   - Remove methods like `generateKeyPairsSet()`, `allContractorKeysPresent()`, `ownKeysCriticalCount()`
+
+4. **Interface Compatibility**:
+   - Maintain existing public interfaces where possible
+   - Update method calls throughout keychain classes
+   - Ensure single-key operations work correctly
+   - Preserve `keys_set_sequence_number` related functionality
+
+5. **Database Handler Interface Updates**:
+   - Update `OwnKeysHandler` interface to work with SPHINCS+ types
+   - Update `ContractorKeysHandler` interface to work with SPHINCS+ types
+   - Update `PaymentKeysHandler` interface to work with SPHINCS+ types
+   - Modify method signatures in handler interfaces to accept `sphincs::PublicKey::Shared` and `sphincs::PrivateKey*`
+   - Update return types to provide SPHINCS+ key types
 
 ## Definition of Done (DOD)
 - [ ] All keychain methods updated to use SPHINCS+ instead of Lamport
-- [ ] KeyNumber parameter removed from all keychain methods and dependent classes
-- [ ] Database schema updated in both SQLite and PostgreSQL implementations
-- [ ] All database handler classes updated to work with simplified schema
-- [ ] Trust line transaction classes updated to remove KeyNumber usage
-- [ ] Payment transaction classes updated to remove KeyNumber usage
-- [ ] Single-key architecture fully implemented and functional
+- [ ] KeyNumber parameter removed from all keychain method signatures
+- [ ] `#include "lamportscheme.h"` replaced with `#include "sphincsscheme.h"` in keychain.h
+- [ ] Single-key architecture implemented in keychain classes
 - [ ] All key management complexity removed (no key sets, availability counting, etc.)
-- [ ] Comprehensive unit tests for `TrustLineKeychain` and `Keystore` classes
-- [ ] Integration tests for trust line and payment operations
-- [ ] All existing functionality preserved with new cryptographic backend
-- [ ] Database migration scripts created (even though no data needs migration)
+- [ ] Method return types updated (no more KeyNumber returns)
+- [ ] All signing and verification methods work with SPHINCS+ primitives
+- [ ] Key generation simplified to single key per trust line
 - [ ] Code follows project coding standards and style guidelines
 - [ ] All modified code properly documented
+- [ ] Database handler interfaces updated to work with SPHINCS+ types
+- [ ] All interface method signatures updated to use SPHINCS+ primitives
+- [ ] Keychain classes compile without errors
+- [ ] Complete keychain + database handler integration works
 
 # Implementation Plan
 
-## Phase 1: Database Schema Analysis and Planning (Week 1, Days 1-2)
-1. **Schema Analysis**:
-   - Analyze current database schema for key-related tables
-   - Identify all tables with `number` and `is_valid` fields
-   - Map dependencies between tables and keychain operations
-   - Plan database handler method modifications
+## Phase 1: Keychain Header Updates (Days 1-2)
+1. **Header File Updates**:
+   - Replace `#include "lamportscheme.h"` with `#include "sphincsscheme.h"` in `keychain.h`
+   - Update all method signatures to remove KeyNumber parameters
+   - Change return types from `pair<Signature, KeyNumber>` to `Signature` where applicable
+   - Update class member variable types if needed
 
-2. **Method Dependency Mapping**:
+2. **Method Signature Planning**:
    - Identify all methods using KeyNumber parameters in keychain classes
-   - Map usage of KeyNumber in trust line and payment transactions
-   - Plan method signature changes and call site updates
+   - Plan new method signatures for single-key operations
+   - Document signature changes for implementation phase
 
-## Phase 2: Database Layer Updates (Week 1, Days 3-5)
-1. **Database Handler Interface Updates**:
-   - Update `src/core/io/storage/interfaces/` for new handler signatures
-   - Remove KeyNumber-related method declarations
-   - Update method signatures for single-key operations
-
-2. **SQLite Handler Updates**:
-   - Update `OwnKeysHandlerSQLite` class in `src/core/io/storage/sqlite/`
-   - Update `ContractorKeysHandlerSQLite` class
-   - Remove KeyNumber-related methods
-   - Update SQL queries to work without `number` and `is_valid` fields
-   - Simplify primary key constraints and indexes
-
-3. **PostgreSQL Handler Updates**:
-   - Update `OwnKeysHandlerPostgreSQL` class in `src/core/io/storage/postgresql/`
-   - Update `ContractorKeysHandlerPostgreSQL` class
-   - Remove KeyNumber-related methods
-   - Update SQL queries for simplified schema
-   - Update indexes and constraints
-
-## Phase 3: Keychain Core Implementation (Week 2, Days 1-3)
-1. **TrustLineKeychain Updates**:
-   - Replace Lamport imports with SPHINCS+ imports in `keychain.h`
-   - Update `sign()` method to use SPHINCS+ signature generation
-   - Update `checkSign()` method to use SPHINCS+ verification
-   - Remove KeyNumber parameters from all method signatures
+## Phase 2: TrustLineKeychain Implementation (Days 3-4)
+1. **Core Method Updates**:
+   - Update `sign()` method to use SPHINCS+ signature generation and return single signature
+   - Update `checkSign()` method to use SPHINCS+ verification without KeyNumber
+   - Replace all `lamport::` namespace references with `sphincs::`
    - Simplify key retrieval logic to single key per trust line
 
-2. **Payment Receipt Methods**:
+2. **Receipt and Audit Methods**:
    - Update `saveOutgoingPaymentReceipt()` to work without KeyNumber
    - Update `saveIncomingPaymentReceipt()` to work without KeyNumber
-   - Simplify key usage logic (no key invalidation needed)
-   - Update audit record creation to reference single keys
+   - Update `saveFullAudit()`, `saveOwnAuditPart()`, `saveContractorAuditPart()` methods
+   - Remove key number references from audit record creation
 
-3. **Audit Methods**:
-   - Update `saveFullAudit()` to work with single-key approach
-   - Update `saveOwnAuditPart()` and `saveContractorAuditPart()`
-   - Remove key number references from audit records
-   - Simplify audit signature and verification logic
+3. **Key Management Simplification**:
+   - Remove or simplify `generateKeyPairsSet()` method
+   - Remove key availability counting methods: `allContractorKeysPresent()`, `ownKeysCriticalCount()`
+   - Simplify `contractorKeysPresent()` and `ownKeysPresent()` methods
+   - Update key hash generation methods
 
-4. **Keystore Updates**:
-   - Update `generateAndSaveKeyPairForPaymentTransaction()` in `Keystore` class
+## Phase 3: Keystore Implementation (Day 5)
+1. **Keystore Updates**:
+   - Update `generateAndSaveKeyPairForPaymentTransaction()` to use SPHINCS+ primitives
    - Update `signPaymentTransaction()` to use SPHINCS+ signatures
+   - Update return types and method signatures
    - Simplify key management for payment transactions
 
-## Phase 4: Transaction Layer Updates (Week 2, Days 4-5)
-1. **Trust Line Transaction Updates**:
-   - Update all transaction classes in `src/core/transactions/transactions/trust_lines/`
-   - Remove KeyNumber parameters from constructors and methods
-   - Update audit transactions: `AuditSourceTransaction`, `AuditTargetTransaction`
-   - Update key sharing transactions: `PublicKeysSharingSourceTransaction`, etc.
+## Phase 4: Database Handler Interface Updates (Days 5-6)
+1. **Handler Interface Updates**:
+   - Update `OwnKeysHandler.h` interface to use `sphincs::PublicKey::Shared` and `sphincs::PrivateKey*`
+   - Update `ContractorKeysHandler.h` interface to use `sphincs::PublicKey::Shared`
+   - Update `PaymentKeysHandler.h` interface to use SPHINCS+ types
+   - Update method signatures across all database handler interfaces
 
-2. **Payment Transaction Updates**:
-   - Update payment transaction classes in `src/core/transactions/transactions/regular/payments/`
-   - Remove KeyNumber usage from `CoordinatorPaymentTransaction`
-   - Update `ReceiverPaymentTransaction`, `IntermediateNodePaymentTransaction`
-   - Simplify signature and verification logic in all payment classes
+2. **Implementation Updates**:
+   - Update SQLite implementations to work with SPHINCS+ key storage
+   - Update PostgreSQL implementations to work with SPHINCS+ key storage
+   - Ensure key serialization/deserialization works with SPHINCS+ types
+   - Update database access patterns for single-key architecture
 
-## Phase 5: Key Management Simplification (Week 3, Days 1-2)
-1. **Remove Key Set Logic**:
-   - Remove `generateKeyPairsSet()` method or simplify to single key generation
-   - Remove key availability counting methods
-   - Remove key exhaustion checking logic
-   - Update initial audit conditions to work without key counting
+## Phase 5: Compilation and Basic Validation (Days 7-8)
+1. **Compilation Fixes**:
+   - Resolve any compilation errors from signature changes
+   - Update method calls within keychain classes
+   - Ensure all SPHINCS+ primitive usage is correct
+   - Fix any missing includes or namespace issues
 
-2. **Simplify Key Access**:
-   - Remove `allContractorKeysPresent()`, `ownKeysCriticalCount()` methods
-   - Simplify `contractorKeysPresent()` and `ownKeysPresent()` methods
-   - Update key hash generation methods to work with single keys
-
-## Phase 6: Testing and Validation (Week 3, Days 3-5)
-1. **Unit Test Development**:
-   - Create comprehensive tests for updated `TrustLineKeychain` class
-   - Create tests for updated `Keystore` class
-   - Test all keychain methods with SPHINCS+ backend
-   - Test database operations with simplified schema
-
-2. **Integration Testing**:
-   - Test complete trust line creation and operation workflows
-   - Test payment transaction signing and verification
-   - Test audit operations with single-key architecture
-   - Test database handler integration with new schema
-
-3. **Regression Testing**:
-   - Verify all existing functionality works with new implementation
-   - Test error handling and edge cases
-   - Verify performance meets requirements
+2. **Basic Functionality Verification**:
+   - Verify keychain classes instantiate correctly
+   - Check that basic signing operations work
+   - Validate single-key architecture implementation
+   - Document any issues for follow-up tasks
 
 # Test Plan
 
+**Note**: This task does not include test implementation. Tests will be implemented in a separate dedicated testing task.
+
 ## Test Objectives
-Verify that keychain migration to SPHINCS+ maintains all existing functionality while properly implementing single-key architecture and removing unnecessary complexity.
+Verify that keychain classes migration to SPHINCS+ works correctly with proper single-key architecture implementation.
 
 ## Test Scope
-- TrustLineKeychain and Keystore class functionality
-- Database operations with simplified schema
-- Trust line and payment transaction operations
-- Integration between keychain and transaction layers
-- Error handling and edge cases
+- TrustLineKeychain and Keystore class compilation
+- Basic SPHINCS+ primitive usage in keychain methods
+- Method signature correctness
+- Single-key architecture implementation
 
-## Environment & Setup
-- Development environment with SPHINCS+ primitives available (from Task 02-1)
-- Test databases (SQLite and PostgreSQL) with updated schema
-- C++ testing framework for unit and integration tests
-- Mock data for trust line and payment scenarios
-
-## Mocking Strategy
-- Mock database connections for isolated unit tests
-- Use real database instances for integration tests
-- Mock network components not related to cryptographic operations
-- Use real SPHINCS+ primitives for cryptographic operations
-
-## Key Test Scenarios
-
-### TrustLineKeychain Unit Tests
-- **Single Key Generation**: Test key pair generation for trust lines
-- **Signing Operations**: Test `sign()` method with SPHINCS+ signatures
-- **Signature Verification**: Test `checkSign()` method with SPHINCS+ verification
-- **Receipt Operations**: Test payment receipt saving and retrieval
-- **Audit Operations**: Test audit record creation and verification
-- **Key Retrieval**: Test single-key retrieval methods
-
-### Keystore Unit Tests
-- **Payment Key Generation**: Test key pair generation for payment transactions
-- **Payment Signing**: Test payment transaction signing with SPHINCS+
-- **Key Management**: Test keychain creation and management
-
-### Database Handler Tests
-- **Key Storage**: Test key saving and loading with simplified schema
-- **Single Key Lookup**: Test key retrieval without KeyNumber
-- **Schema Compliance**: Verify database operations work with updated tables
-- **Error Handling**: Test behavior with database errors
-
-### Transaction Integration Tests
-- **Trust Line Operations**: Test complete trust line creation and management
-- **Payment Processing**: Test payment transaction creation and verification
-- **Audit Workflows**: Test audit creation and resolution processes
-- **Cross-Transaction Integrity**: Test data consistency across operations
-
-### Migration and Compatibility Tests
-- **Functionality Preservation**: Verify all existing features work with new implementation
-- **Performance Comparison**: Compare performance with previous Lamport implementation
-- **Error Scenarios**: Test error handling in various failure conditions
-- **Concurrent Operations**: Test thread safety and concurrent access
-
-## Success Criteria
-- All keychain unit tests pass with 100% success rate
-- Integration tests demonstrate proper functionality across all components
-- Database operations work correctly with simplified schema
-- All existing functionality preserved with SPHINCS+ backend
-- Performance meets or exceeds previous implementation
-- No memory leaks or security vulnerabilities introduced
+## Manual Validation
+- Verify classes compile without errors
+- Check that SPHINCS+ primitives are properly used
+- Validate method signatures match new single-key design
+- Ensure basic instantiation works correctly
 
 # Verification and Validation
 
