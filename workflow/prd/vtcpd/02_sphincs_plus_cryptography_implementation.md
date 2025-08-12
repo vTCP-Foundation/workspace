@@ -169,6 +169,25 @@ This implementation establishes a modern cryptographic foundation that simplifie
    - **Impact Assessment**: Simplified database schema
    - **Migration Strategy**: Schema update without data preservation
 
+3. **Payment Transactions Single-Key Refactor**
+   - **Description**: Unify payment transaction signing to use a single reusable payment key (SPHINCS+) across all transactions; eliminate per-transaction key coupling.
+   - **Requirements**:
+     1) Update `payment_keys` table: remove `transaction_uuid`; add numeric `id` (auto-increment, unique) and create an index on it.
+     2) Update `payment_transactions` table: add `payment_key_id` referencing `payment_keys(id)` as a foreign key.
+     3) Change `getOwnPrivateKey` in `src/core/io/storage/interfaces/PaymentKeysHandler.h` and implementations: remove `transactionUUID` parameter; return the key with the largest `id`.
+     4) In payment transactions under `src/core/transactions/transactions/regular/payments/`, remove code that generates a payment key per transaction.
+     5) In payment transactions signing flow, obtain the key by the maximum `id` instead of by `transactionUUID`.
+     6) Startup behavior: implement the key existence check in `Keystore::init()` (`src/core/crypto/keychain.h` / `.cpp`). Add a `Keystore` method to check key presence and call it from `init()`. Add a similar presence-check method to `PaymentKeysHandler` interface and all implementations.
+     7) Replace `deleteKeyByTransactionUUID` with `deleteKeyByID(id)` across `PaymentKeysHandler` interface and implementations.
+     8) Remove `allTransactionUUIDs` from `PaymentKeysHandler` and remove `removeOutdatedPaymentsKeysData` from `src/core/crypto/keychain.h` together with all its invocations.
+   - **Acceptance Criteria**:
+     - SQLite and PostgreSQL schema definitions updated (no migrations required)
+     - Field naming is `payment_key_id` in `payment_transactions`
+     - Startup path ensures at least one payment key via `Keystore::init()`
+     - All storage handlers updated and compiled
+     - Payment transaction code updated to single-key flow and compiled
+     - Unit tests updated/added to verify max-id key retrieval and startup generation path; all tests pass
+
 #### Bug Fixes & Technical Improvements
 - **Key Exhaustion Elimination**: Remove all logic related to key depletion and availability counting
 - **Storage Optimization**: Reduce key storage requirements by >90%
@@ -312,11 +331,18 @@ This implementation establishes a modern cryptographic foundation that simplifie
 - **Load Testing**: Multi-threading and concurrent operations
 
 ### Quality Gates
-- All existing functional tests pass with new implementation
-- New SPHINCS+ tests pass
+- All test targets (unit + integration) are included in the CMake build; no tests are disabled
+- All test suites (SQLite and PostgreSQL) compile successfully under the updated SPHINCS+ APIs (passing execution is not required in this iteration)
+- New SPHINCS+ tests compile successfully
 - Performance benchmarks meet requirements
 - Security review completed
 - Code quality standards met
+
+### Build and Test Suite Requirements (Iteration 2)
+To support the migration, the following explicit requirements apply to the test infrastructure in this iteration:
+- Update database-related tests (SQLite and PostgreSQL) to the simplified single-key schema and new interfaces (e.g., remove `number` and `is_valid` usage; use `getPublicKey`, `getPublicKeyHash`, `hasKey`, `invalidateKey`, `deleteKeyByTrustLineID`/`deleteKeyByID`, etc.).
+- Ensure all tests are part of the build (unit and integration), with no tests excluded by CMake.
+- Success criteria for this iteration with regard to tests is a successful compilation of all test targets; passing runtime execution of tests is not required.
 
 ## Deployment & Release Strategy
 ### Release Approach

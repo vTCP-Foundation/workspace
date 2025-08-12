@@ -33,6 +33,13 @@ This PRD involves replacing the Lamport one-time signature scheme with SPHINCS+ 
 - **Dependencies**: Task 02-2 (Keychain migration must be completed first)
 - **Estimated Duration**: 1 week
 
+### Task 02-6: Update DB Tests and Enable All Tests in Build
+- **File**: `02-6-update-db-tests-and-enable-all-tests.md`
+- **Complexity**: Simple
+- **Description**: Adapt SQLite and PostgreSQL tests to SPHINCS+ single-key interfaces and ensure all unit/integration tests are included in the build. Only successful compilation is required in this iteration (test passing not required).
+- **Dependencies**: Task 02-4 (schema simplified) and Task 02-5 (payment keys refactor)
+- **Estimated Duration**: 1-2 days
+
 ## Task Dependencies
 ```
 02-1 (OpenSSL + SPHINCS+ Primitives)
