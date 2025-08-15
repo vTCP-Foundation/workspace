@@ -26,6 +26,9 @@
 - Documentation and operational procedures
 
 
+todo: include info that the implementation must implement "basic" hotstuff consensus protocol, not the "pipeline" version.
+   Pipelined version can be implemented further in the future.
+
 
 [Brief overview of this iteration, its purpose, and expected outcomes to be filled]
 - **Current project state**: [What's been completed in previous iterations to be filled]

@@ -1,0 +1,245 @@
+sequenceDiagram
+    participant L as Leader Node
+    participant N as Network Layer
+    participant C as Consensus Engine
+    participant BT as Block Tree
+    participant S as Storage
+    participant CR as Crypto
+    participant V as Validator Nodes
+    participant LOG as Logging System
+    
+    %% Message Types Legend
+    Note over CR: Signature scheme: SPHINCS+
+    Note over C: QC = bitmap || {sig_i} (≥2f+1 SPHINCS+)<br/>Verification iterates over each sig_i
+    Note over L,V: ProposalMsg(view, blockID, QC, leaderSig)<br/>VoteMsg(phase, blockID, sig)<br/>PrepareQC / PreCommitQC / CommitQC (quorumCert)<br/>TimeoutMsg(view, sig)<br/>NewViewMsg(view, highestQC, sig)<br/>StateSyncMsg(blocks, sigmap)<br/>EvidenceMsg(evidence, sig)
+    
+    Note over L,V: System starts with GenesisQC (view -1)
+    Note over L,V: View v, Phase: Prepare
+    
+    %% Block Proposal Phase
+    L->>+C: Propose new block
+    C->>+BT: Get highest QC
+    BT-->>-C: Return highest QC
+    C->>+S: Get parent block
+    S-->>-C: Return parent block
+    C->>C: Create new block with QC
+    C->>+CR: Sign block proposal (LeaderSig)
+    CR-->>-C: Return leader signature
+    C->>+N: Broadcast(ProposalMsg)
+    N-->>-V: Send to all validators
+    
+    Note over L,V: Validators receive proposal
+    
+    %% Prepare Phase Processing with Error Handling
+    V->>+N: Receive ProposalMsg
+    N->>+C: Forward proposal
+    
+    alt Valid Proposal Path
+        C->>C: Validate view number
+        C->>+BT: Check parent exists
+        BT->>+S: Lookup parent block
+        S-->>-BT: Return parent
+        BT-->>-C: Parent validation result
+        C->>C: Ensure parent is highestQC.block or descendant of locked block
+        C->>+CR: Verify proposal signature
+        CR-->>-C: Signature valid
+        C->>C: Apply safety rules
+        C->>+BT: Add block to tree
+        BT->>+S: Store block
+        S-->>-BT: Block stored
+        BT-->>-C: Block added
+        C->>+CR: Sign prepare vote
+        CR-->>-C: Return vote signature
+        C->>+N: Send vote to leader
+        N-->>-L: Deliver vote
+    else Invalid View Number
+        C->>C: Reject proposal (wrong view)
+        C->>+N: Send view-change timeout
+        N-->>-V: Broadcast timeout
+    else Invalid Parent
+        C->>C: Reject proposal (invalid parent)
+        Note over C: No vote sent
+    else Invalid Signature
+        C->>+CR: Verify proposal signature
+        CR-->>-C: Signature invalid
+        C->>C: Reject proposal (bad signature)
+        Note over C: Potential byzantine behavior detected
+    else Safety Rule Violation
+        C->>C: Reject proposal (safety violation)
+        Note over C: No vote sent
+    else Network Failure
+        N->>N: Message delivery failed
+        Note over N: Timeout will trigger view change
+    end
+    
+    Note over L,V: Leader collects prepare votes
+    
+    %% Prepare QC Formation with Error Handling
+    L->>+C: Receive prepare votes
+    
+    alt Sufficient Votes (≥2f+1)
+        C->>C: Check vote threshold (2f+1)
+        C->>+CR: Verify vote signatures
+        CR-->>-C: Signatures valid
+        C->>C: Form Prepare QC
+        C->>+S: Store prepare QC
+        S-->>-C: QC stored
+        Note over S: fsync to disk
+        C->>+N: Broadcast(PrepareQC)
+        N-->>-V: Send PrepareQC to validators
+    else Insufficient Votes
+        C->>C: Timeout waiting for votes
+        C->>+CR: Sign timeout message
+        CR-->>-C: Return timeout signature
+        C->>+N: Broadcast timeout
+        N-->>-V: Send timeout to validators
+        Note over L,V: View change triggered
+    else Invalid Vote Signatures
+        C->>+CR: Verify vote signatures
+        CR-->>-C: Some signatures invalid
+        C->>C: Reject invalid votes
+        Note over C: Continue waiting or timeout
+    else Equivocation Detected
+        C->>C: Multiple votes from same validator
+        C->>C: Report byzantine behavior
+        Note over C: Exclude equivocating votes
+    end
+    
+    Note over L,V: Pre-Commit Phase begins
+    
+    %% Pre-Commit Phase
+    C->>+N: Broadcast(PrepareQC)
+    N-->>-V: Send QC to validators
+    V->>+C: Receive PrepareQC
+    C->>+CR: Verify all QC signatures
+    CR-->>-C: QC valid
+    C->>C: Update locked block
+    C->>+CR: Sign pre-commit vote  
+    CR-->>-C: Return vote signature
+    C->>+N: Send pre-commit vote
+    N-->>-L: Deliver vote
+    
+    %% Pre-Commit QC Formation
+    L->>+C: Collect pre-commit votes
+    C->>C: Check vote threshold (2f+1)
+    C->>+CR: Verify vote signatures
+    CR-->>-C: Signatures valid
+    C->>C: Form Pre-Commit QC
+    C->>+S: Store pre-commit QC
+    S-->>-C: QC stored
+        Note over S: fsync to disk
+    
+    Note over L,V: Commit Phase begins
+    
+    %% Commit Phase
+    C->>+N: Broadcast(PreCommitQC)
+    N-->>-V: Send QC to validators
+    V->>+C: Receive PreCommitQC
+    C->>+CR: Verify all QC signatures
+    CR-->>-C: QC valid
+    C->>+CR: Sign commit vote
+    CR-->>-C: Return vote signature
+    C->>+N: Send commit vote
+    N-->>-L: Deliver vote
+    
+    %% Commit QC Formation
+    L->>+C: Collect commit votes
+    C->>C: Check vote threshold (2f+1)
+    C->>+CR: Verify vote signatures
+    CR-->>-C: Signatures valid
+    C->>C: Form Commit QC
+    C->>+S: Store commit QC
+    S-->>-C: QC stored
+        Note over S: fsync to disk
+    
+    Note over L,V: Decide Phase begins
+    
+    %% Decide Phase & Block Commit
+    C->>+N: Broadcast(CommitQC)
+    N-->>-V: Send QC to validators
+    V->>+C: Receive CommitQC
+    C->>+CR: Verify all QC signatures
+    CR-->>-C: QC valid
+    C->>+BT: Mark block as committed
+    BT->>+S: Update committed height
+    S-->>-BT: Height updated
+    BT-->>-C: Block committed
+    C->>C: Emit committed block event
+    C->>LOG: Append block metric
+    
+    Note over L,V: Block committed, move to next view
+    
+    %% View Change & Recovery Scenarios
+    rect rgb(255, 240, 240)
+        Note over L,V: View Change Scenarios
+        
+        alt Timeout in Any Phase
+            C->>C: Phase timeout detected
+            Note over C: Timeout = baseTimeout * 2^view
+            C->>+CR: Sign timeout message
+            CR-->>-C: Return signature
+            C->>+N: Broadcast timeout
+            N-->>-V: Send to validators
+            V->>C: Collect timeout messages (≥2f+1)
+            C->>C: Advance to next view
+            C->>+N: Broadcast(NewViewMsg, highestQC)
+            N-->>-L: Deliver NewView to new leader
+            Note over L: Collect NewViewMsg (≥2f+1)
+            C->>C: Select new leader (round-robin)
+        else Leader Failure
+            Note over L: Leader becomes unresponsive
+            V->>V: Detect leader silence
+            V->>+N: Broadcast blame message
+            N-->>-V: Propagate blame
+            C->>C: Trigger view change
+        else Network Partition
+            Note over N: Network splits
+            C->>C: Insufficient connectivity detected
+            C->>C: Enter recovery mode
+        end
+    end
+    
+    %% Sync & Recovery Protocol
+    rect rgb(240, 255, 240)
+        Note over L,V: Recovery & Sync Protocol
+        
+        alt Node Behind (Missing Blocks)
+            C->>+N: LatestStateReq
+            N->>+V: Query latest committed state
+            V-->>-N: Return committed blocks
+            N-->>-C: StateSyncMsg
+            C->>+BT: Reconstruct block tree
+            BT->>+S: Store recovered blocks
+            S-->>-BT: Blocks stored
+            BT-->>-C: Tree updated
+        else Conflicting Forks
+            C->>+BT: Detect fork conflict
+            BT->>+C: Return competing chains
+            C->>C: Apply fork choice rule (highestQC / highest view number)
+            C->>+BT: Prune invalid branches
+            BT-->>-C: Tree pruned
+        end
+    end
+    
+    %% Byzantine Behavior Detection
+    rect rgb(255, 245, 245)
+        Note over L,V: Byzantine Behavior Handling
+        
+        alt Equivocation Detection
+            C->>C: Detect double voting
+            C->>+S: Log byzantine evidence
+            S-->>-C: Evidence stored
+            C->>+N: Broadcast EvidenceMsg (signed)
+            N-->>-V: Propagate to network
+        else Invalid QC Received
+            C->>+CR: Verify QC integrity
+            CR-->>-C: QC verification failed
+            C->>C: Reject invalid QC
+            Note over C: Potential byzantine leader
+        else Conflicting Proposals
+            C->>C: Multiple proposals for same view
+            C->>+S: Log equivocation evidence
+            S-->>-C: Evidence logged
+            Note over C: Leader byzantine behavior
+        end
+    end
