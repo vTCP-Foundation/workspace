@@ -38,6 +38,7 @@ Other consensus protocols considered:
 
 ### HotStuff Protocol Reference
 - **Academic Paper**: [HotStuff: BFT Consensus with Linearity and Responsiveness](https://arxiv.org/abs/1803.05069) (PODC 2019)
+- **HotStuff Data Flow**: [HotStuff Data Flow](/architecture/btc-federation/protocols/hot-stuff-consensus/data-flow.mermaid)
 
 ## Decision
 We have decided to adopt **HotStuff** as our Byzantine Fault Tolerant consensus protocol for the BTC Federation.
@@ -102,7 +103,6 @@ We have decided to adopt **HotStuff** as our Byzantine Fault Tolerant consensus 
 - **Availability**: >99% uptime with >2/3 participant availability
 
 ## References
-- **HotStuff Paper**: [HotStuff: BFT Consensus with Linearity and Responsiveness](https://arxiv.org/abs/1803.05069) (PODC 2019)
 - **FROST Analysis**: [PRD-03 MuSig2 vs FROST Comparative Analysis](/workflow/prd/btc-federation/03_musig2_frost_comparative_analysis.md)
 - **Bitcoin Security Model**: BIP-340 (Schnorr Signatures), BIP-341 (Taproot)
 - **Related Architecture**: [BTC Federation Entity](/architecture/common/entities/btc_federation.md)

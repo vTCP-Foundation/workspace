@@ -1,0 +1,33 @@
+graph TD
+    subgraph SecurePerimeter ["🔒 Secure Perimeter"]
+        User[Node Operator<br/><b>Person</b><br/><br/>Configures and monitors<br/>the consensus node]
+        
+        Node[Federation Node<br/><b>Software System</b><br/><br/>Participates in Byzantine Fault Tolerant consensus to power the Federation]
+        
+        MonitoringSystem[Monitoring System<br/><b>Internal System</b><br/><br/>Collects performance metrics<br/>and system health data]
+    end
+    
+
+    subgraph PublicInternet ["🌐 Public Internet"]
+        ValidatorNetwork[Federation Network<br/><b>External System</b><br/><br/>Other Federation nodes<br/>in the distributed network]
+    end
+    
+    User --> Node
+    User --> MonitoringSystem
+    Node --> MonitoringSystem
+    Node -.-> ValidatorNetwork
+    
+    classDef person fill:#08427b,stroke:#fff,stroke-width:2px,color:#fff
+    classDef system fill:#1168bd,stroke:#fff,stroke-width:2px,color:#fff
+    classDef internal fill:#2e7d32,stroke:#fff,stroke-width:2px,color:#fff
+    classDef infrastructure fill:#6a1b9a,stroke:#fff,stroke-width:2px,color:#fff
+    classDef external fill:#999,stroke:#fff,stroke-width:2px,color:#fff
+    classDef secureZone fill:#e8f5e8,stroke:#2e7d32,stroke-width:3px,color:#000
+    classDef publicZone fill:#fff3e0,stroke:#ff8f00,stroke-width:3px,color:#000
+    
+    class User person
+    class Node system
+    class MonitoringSystem internal
+    class ValidatorNetwork external
+    class SecurePerimeter secureZone
+    class PublicInternet publicZone
