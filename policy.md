@@ -138,7 +138,8 @@ It aims to eliminate ambiguity, reduce supervision needs, and facilitate automat
 - **Task-Driven Development**: No code shall be created or changed unless there is a task explicitly authorizing that change.
 
 - **Task Granularity**: Tasks must be defined to be as small as practicable while still representing a cohesive, testable unit of work. Large or complex features should be broken down into multiple smaller tasks.
-
+- **Separate Implementation and Validation Tasks**: During task compilation from a PRD, any task that introduces new or modified code must have its testing and bug-fixing work handled in one or more dedicated follow-up tasks. The initial implementation task must focus solely on delivering the core functionality, while subsequent tasks are responsible for automated testing and defect remediation. This separation enables different AI agents to work concurrently, preserves clear responsibility boundaries, and simplifies validation.
+- **Happy Flow First**: When decomposing a PRD into multiple tasks, structure the sequence so that the "happy flow" (i.e., the primary successful execution path) is implemented before any tasks related to formal testing, edge-case handling, or optimization. Completing a working end-to-end flow first minimises rework by exposing integration issues early and provides a stable baseline against which subsequent tests can be written.
 - **PRD Alignment**: Each task must be explicitly defined as a part of PRD (Product Requirements Document)
 
 ## Changes Approving Policy
