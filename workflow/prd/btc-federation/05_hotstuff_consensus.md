@@ -11,6 +11,7 @@
 - **Related Documents**:
    - [BTC Federation](/architecture/common/entities/btc_federation.md)
    - [ADR-005 HotStuff Consensus Protocol](/architecture/btc-federation/adrs/ADR-005-hotstuff-consensus-protocol.md)
+   - [ADR-006 Consensus Node Identification](/architecture/btc-federation/adrs/ADR-006-consensus-node-identification.md)
    - [C4 Level 1](/architecture/btc-federation/c4-level1/c1.mermaid)
    - [C4 Level 2](/architecture/btc-federation/c4-level2/c2.mermaid)
    - [C4 Level 3](/architecture/btc-federation/c4-level3/c3.mermaid)
@@ -280,11 +281,73 @@ Define how success will be measured for this iteration:
 - **Automated Testing**: Generate comprehensive test suites covering all Byzantine behaviors specified in BFT requirements, with focus on property-based testing for consensus protocol validation
 - **Documentation**: Auto-generate and maintain consistency across:
   - API documentation using project standards
-  - ADR updates for implementation decisions (ADR-005 and new ADRs as needed)
+  - ADR updates for implementation decisions (ADR-005, ADR-006, and new ADRs as needed)
   - C4 diagram updates (C1-C4 levels) reflecting implementation changes
   - PRD updates based on implementation learnings
 - **Byzantine Simulation**: Implement automated failure injection and network partition testing using configurable mock infrastructure
 - **Validation Pipeline**: Automated verification of protocol compliance against HotStuff specification with comprehensive edge case coverage
+
+## Implementation Updates
+
+### Task 05-01 Consensus Foundation Setup - COMPLETED ✅
+
+**Completion Date**: 2025-08-18  
+**Implementation Status**: All core data structures and foundation completed with significant architectural improvements.
+
+#### Key Implementation Achievements:
+
+1. **Node Identification Architecture** (see [ADR-006](/architecture/btc-federation/adrs/ADR-006-consensus-node-identification.md))
+   - **NodeID Type**: Changed from `string` to `uint16` for memory efficiency and bitmap operations
+   - **Consensus Configuration**: Implemented `ConsensusConfig` struct with static participant management
+   - **Byzantine Fault Tolerance**: Proper quorum calculations using n=3f+1 formula
+   - **Bitmap Efficiency**: Direct bit manipulation for voter participation tracking
+
+2. **Core Data Structures Implemented**:
+   - ✅ `Block` struct with SHA-256 hash calculation and validation
+   - ✅ `Vote` struct supporting all consensus phases (Prepare, PreCommit, Commit)
+   - ✅ `QuorumCertificate` with efficient voter bitmaps and quorum validation
+   - ✅ `ConsensusConfig` for static network configuration and BFT calculations
+   - ✅ Message types: `ProposalMsg`, `VoteMsg`, `TimeoutMsg`, `NewViewMsg`
+
+3. **Validation Framework**:
+   - ✅ All validation methods accept `*ConsensusConfig` parameter
+   - ✅ Proper quorum threshold enforcement (2f+1 for f Byzantine nodes)
+   - ✅ NodeID range validation against known participants
+   - ✅ Comprehensive data structure validation with error reporting
+
+4. **Demo Application**:
+   - ✅ 5-node consensus network demonstration (tolerates 1 Byzantine node)
+   - ✅ Complete consensus flow from proposal to commitment
+   - ✅ Quorum formation validation (3 votes required for 5-node network)
+   - ✅ Message type discrimination and validation
+
+#### Architectural Improvements Made:
+
+**Memory Efficiency**: NodeID changed from variable-length strings to 2-byte uint16 identifiers, reducing memory usage and enabling efficient bitmap operations.
+
+**Static Configuration**: Introduction of `ConsensusConfig` provides:
+- Known participant set for proper validation
+- Automatic Byzantine fault tolerance calculations
+- Efficient voter bitmap generation and parsing
+- Deterministic quorum threshold enforcement
+
+**Enhanced Validation**: All data structures now validate against network configuration, ensuring:
+- NodeIDs are within valid range
+- Quorum thresholds meet Byzantine requirements (2f+1)
+- Voter participation meets consensus requirements
+
+#### Network Configuration Example:
+```go
+// 5-node network configuration
+config := ConsensusConfig{
+    TotalNodes:      5,
+    FaultyNodes:     1,     // f = (5-1)/3 = 1
+    QuorumThreshold: 3,     // 2f+1 = 3
+    Participants:    [0, 1, 2, 3, 4]
+}
+```
+
+This foundation enables the next phase of development (Task 05-02: HotStuff State Machine) with robust, efficient, and properly validated core components.
 
 
 ## Risk Management
@@ -354,6 +417,7 @@ This category of tests is designed to ensure the system's resilience to failures
 ### References
 - Related documents: 
   - [ADR-005 HotStuff Consensus Protocol](/architecture/btc-federation/adrs/ADR-005-hotstuff-consensus-protocol.md)
+  - [ADR-006 Consensus Node Identification](/architecture/btc-federation/adrs/ADR-006-consensus-node-identification.md)
   - [BTC Federation Entity Definition](/architecture/common/entities/btc_federation.md)
   - [C4 Architecture Diagrams](/architecture/btc-federation/c4-level1/c1.mermaid)
 - External resources:
@@ -373,6 +437,7 @@ API specifications will be generated during implementation and documented in:
 | Version | Date | Author | Changes | Iteration |
 |---------|------|--------|---------|--------------|
 | 1.0 | 2025-08-15 | Dima Chizhevsky, Mykola Ilashchuk | Initial draft for HotStuff consensus implementation | Phase 05 |
+| 1.1 | 2025-08-18 | Claude Code Agent | Added Task 05-01 completion status and architectural improvements documentation. Updated references to include ADR-006 for node identification design decisions. | Phase 05 |
 
 **Related Documents**
 - **Master Project Vision**: BTC Federation - Decentralized Bitcoin asset management system
