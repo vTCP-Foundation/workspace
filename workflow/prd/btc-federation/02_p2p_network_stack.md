@@ -1,4 +1,4 @@
-# Project Requirements Document (PRD)
+# BTC Federation P2P Network Stack
 
 ## Document Information
 - **Project Name**: BTC Federation
