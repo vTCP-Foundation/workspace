@@ -269,6 +269,21 @@ Introduce exchange-rate support as a foundational step toward a future "exchange
   - `testCalculateThrowsOverflowError()`: MAX_TRUSTLINE_AMOUNT * 2 throws OverflowError
   - `testTimerExpiryRemovesStaleRates()`: Add rate, advance time, verify removal
   - `testTimerReschedulesAfterCleanup()`: Multiple rates with different expiry, verify timer reschedules to earliest
+  - `testCalculateNoOverflowOnMultiplyButOverflowOnShift()`: Use amount = MAX_TRUSTLINE_AMOUNT / 10 + 1, rate = 1.0, shift = +1; multiplication is safe, applying the positive shift causes OverflowError
+  - `testCalculateResultBecomesZeroAfterNegativeShift()`: 99 * 1.0 with shift -3 results in 0
+  - `testCalculateTruncatesTowardZeroOnNegativeShiftWithRemainder()`: 199 * 1.0 with shift -2 results in 1 (no rounding)
+  - `testCalculateWithZeroAmount()`: 0 * 2.5 with shift +5 results in 0
+  - `testCalculateWithZeroRate()`: 123456 * 0.0 with shift +6 results in 0
+  - `testCalculateWithFractionalRateAndPositiveShift()`: 1000 * 1.2345 with shift +2 results in 123450
+  - `testCalculateWithVerySmallRate()`: Test with very small rate (e.g., 0.0001) to verify precision handling
+  - `testCalculateWithVeryLargeRate()`: Test with very large rate approaching TrustLineAmount limits
+  - `testCalculateNegativeShiftResultingInZero()`: Test cases where negative shift reduces result to zero (e.g., 50 * 1.0 with shift -3 = 0)
+  - `testCalculateMaxShiftValues()`: Test with maximum positive and negative int16_t shift values
+  - `testCalculateChainedOverflow()`: Verify overflow detection at different calculation stages (multiplication vs shift application)
+  - `testCalculateWithMinTrustLineAmount()`: Test conversion with minimum possible TrustLineAmount values
+  - `testCalculatePrecisionLossWithNegativeShift()`: Verify truncation behavior with fractional results (e.g., 199 * 1.0 with shift -2 = 1, not 2)
+  - `testCalculateMaxAmountWithUnitRate()`: MAX_TRUSTLINE_AMOUNT * 1.0 with shift 0 should not overflow
+  - `testCalculateOverflowOnPositiveShiftOnly()`: Safe multiplication but overflow when applying positive shift
 
 ### Quality Gates
 - All new unit tests must pass in `build-tests` environment
