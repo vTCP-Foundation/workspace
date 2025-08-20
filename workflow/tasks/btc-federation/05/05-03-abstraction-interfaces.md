@@ -8,6 +8,8 @@
 # Description
 Define clean abstraction interfaces for Network, Storage, and Crypto layers to enable the consensus engine to operate independently of specific implementations. Design interfaces without signature aggregation for future compatibility.
 
+**Note**: The interfaces defined in this task (`NetworkInterface`, `StorageInterface`, and `CryptoInterface`) are purely for abstraction purposes. The `NetworkInterface` will serve as a connection point to the P2P network stack previously implemented ([P2P Network Stack PRD](/workspace/workflow/prd/btc-federation/02_p2p_network_stack.md)). The implementation of these interfaces is out of scope for this task, which should focus solely on defining their structure and methods.
+
 # Requirements and DOD
 - **NetworkInterface**: Define methods for message transmission between consensus nodes
 - **StorageInterface**: Define methods for persisting consensus state and block data
@@ -23,8 +25,6 @@ Define clean abstraction interfaces for Network, Storage, and Crypto layers to e
   - `Send(nodeID NodeID, message ConsensusMessage) error` - Send message to specific node
   - `Broadcast(message ConsensusMessage) error` - Broadcast message to all nodes
   - `Receive() <-chan ReceivedMessage` - Channel for incoming messages
-  - `SetMessageHandler(handler MessageHandler)` - Set message processing handler
-  - `GetConnectedNodes() []NodeID` - Get list of connected peer nodes
 - Define `ReceivedMessage` struct with sender and message content
 
 ## Step 2: StorageInterface Definition
@@ -53,13 +53,7 @@ Define clean abstraction interfaces for Network, Storage, and Crypto layers to e
   - `ValidationError` - Protocol rule violations
 - Add error wrapping and context preservation
 
-## Step 5: Configuration Interfaces
-- Define `NetworkConfig` for network layer configuration
-- Define `StorageConfig` for storage layer configuration
-- Define `CryptoConfig` for cryptographic configuration
-- Add validation methods for all configurations
-
-## Step 6: Demo Implementation
+## Step 5: Demo Implementation
 - Create demo showing:
   1. Interface instantiation with mock implementations
   2. Message handling through NetworkInterface
