@@ -1,0 +1,74 @@
+graph TD
+    NetworkManager[Network Manager]
+    StorageManager[Storage Manager] 
+    CryptoService[Crypto Service]
+    
+    subgraph ConsensusEngine [Consensus Engine Component]
+        HotStuffConsensus[HotStuffConsensus<br/><br/>Main protocol coordinator; Message routing;]
+        
+        BlockTree[BlockTree<br/><br/>Block DAG structure; Fork management]
+        
+        VotingRule[VotingRule<br/><br/>Vote validation; QC formation]
+        
+        SafetyRules[SafetyRules<br/><br/>Prevents conflicts; Safety validation]
+        
+        LeaderElection[LeaderElection<br/>Leader selection<br/>Round-robin]
+        
+        PhaseManager[PhaseManager<br/>Phase transitions<br/>State coordination]
+        
+        ViewManager[ViewManager<br/>View management<br/>Timeout handling]
+        
+        MessageHandler[MessageHandler<br/>Message processing<br/>Type routing]
+        
+        Block["Block<br/>Hash Parent Height<br/>View Proposer<br/>Payload"]
+        
+        Vote[Vote<br/>BlockHash View<br/>Voter Signature]
+        
+        QC["QuorumCertificate<br/>Phase (e.g., Prepare)<br/>Aggregated signatures<br/>Validator bitmap"]
+    end
+    
+    HotStuffConsensus -.-> NetworkManager
+    HotStuffConsensus -.-> StorageManager
+    HotStuffConsensus -.-> CryptoService
+    
+    HotStuffConsensus --> MessageHandler
+    HotStuffConsensus --> PhaseManager
+    HotStuffConsensus --> ViewManager
+    HotStuffConsensus --> LeaderElection
+
+    ViewManager -- triggers on timeout --> LeaderElection
+    
+    MessageHandler --> BlockTree
+    MessageHandler --> VotingRule
+    MessageHandler --> SafetyRules
+    
+    PhaseManager --> VotingRule
+    PhaseManager --> SafetyRules
+    PhaseManager --> BlockTree
+    
+    VotingRule --> BlockTree
+    SafetyRules --> BlockTree
+    
+    MessageHandler --> Block
+    MessageHandler --> Vote
+    MessageHandler --> QC
+    
+    VotingRule --> Vote
+    VotingRule --> QC
+    
+    BlockTree --> Block
+    BlockTree --> QC
+    
+    classDef external fill:#999,stroke:#fff,stroke-width:2px,color:#fff
+    classDef main fill:#4472C4,stroke:#fff,stroke-width:3px,color:#fff
+    classDef core fill:#70AD47,stroke:#fff,stroke-width:2px,color:#fff
+    classDef manager fill:#FFC000,stroke:#333,stroke-width:2px,color:#333
+    classDef handler fill:#C55A5A,stroke:#fff,stroke-width:2px,color:#fff
+    classDef data fill:#B4A7D6,stroke:#333,stroke-width:2px,color:#333
+    
+    class NetworkManager,StorageManager,CryptoService external
+    class HotStuffConsensus main
+    class BlockTree,VotingRule,SafetyRules core
+    class PhaseManager,ViewManager,LeaderElection manager
+    class MessageHandler handler
+    class Block,Vote,QC data
