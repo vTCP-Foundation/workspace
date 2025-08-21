@@ -4,6 +4,12 @@ This policy provides a single, authoritative, machine-readable source of truth f
 
 It aims to eliminate ambiguity, reduce supervision needs, and facilitate automation while maintaining accountability and compliance with best practices.
 
+## Quick Navigation for PRD Workflow
+- **Feature Development Workflow**: See section starting at line ~33 for complete 9-phase process (1.1-9.3)
+- **PRD Template**: [template_prd.md](template_prd.md)
+- **Task Template**: [template_task.md](template_task.md)
+- **PRD Validation Prompt**: [prompts/prd_validation_prompt.md](prompts/prd_validation_prompt.md)
+
 
 # Introduction
 > **Rationale:** Sets the context, actors, and compliance requirements for the policy, ensuring all participants understand their roles and responsibilities.
@@ -11,18 +17,18 @@ It aims to eliminate ambiguity, reduce supervision needs, and facilitate automat
 ## Actors
 > **Rationale:** Defines who is involved in the process and what their roles are.
 
-- **User**: The individual responsible for defining requirements, prioritising work, approving changes, and ultimately accountable for all code modifications.
+- **Architect**: The individual responsible for defining requirements, prioritising work, approving changes, and ultimately accountable for all code modifications.
 
-- **Agent**: The delegate responsible for executing the user's instructions precisely as defined by PRDs and tasks.
+- **Agent**: The delegate responsible for executing the architect's instructions precisely as defined by PRDs and tasks.
 
 
 # Fundamental Principles
-> **Rationale:** Lists the essential guiding principles for all work, such as task-driven development, user authority, and prohibition of unapproved changes.
+> **Rationale:** Lists the essential guiding principles for all work, such as task-driven development, architect authority, and prohibition of unapproved changes.
 
 
 ## Authority and Responsibility
 
-- **User Authority and Responsibility**: The User is the sole decider for the scope and design of ALL work. Responsibility for all code changes remains with the User, regardless of whether the AI Agent performed the implementation.
+- **Architect Authority and Responsibility**: The Architect is the sole decider for the scope and design of ALL work. Responsibility for all code changes remains with the Architect, regardless of whether the AI Agent performed the implementation.
 
 - **Data Sense-Checking**: All data must be sense-checked for consistency and accuracy.
 
@@ -32,62 +38,178 @@ It aims to eliminate ambiguity, reduce supervision needs, and facilitate automat
 
 ### Feature Development Workflow
 
-#### Phase 1: PRD Planning and Preparation
-1. **PRD Creation**: Create PRD using [Template PRD](/template_prd.md)
-2. **PRD Validation**: Validate PRD with [PRD validation prompt](/prompts/prd_validation_prompt.md)
-3. **PRD Decomposition**: Break down PRD into tasks using [Template Task](/template_task.md)
-4. **Task Complexity Assessment**: Determine validation criteria level for each task (Simple/Moderate/Complex) as per "Task Validation Criteria Proportionality"
-5. **User Approval**: Get explicit User approval for the complete task list and validation criteria before proceeding
+#### Phase 1: PRD Creation and Initial Planning
+**1.1 PRD File Creation**
+- Create PRD using [Template PRD](/template_prd.md)
+- Location: `workflow/prd/<project-name>/<PRD-ID>-<SHORT-NAME>.md`
+- Add PRD status tracking header with current phase
+- Update PRD status to `1.1 - PRD file created`
 
-#### Phase 2: Individual Task Implementation (Repeat for Each Task)
+**1.2 Initial Brain Dump**  
+- Architect performs content creation without AI assistance
+- Preserve critical context and decision rationale
+- Document all known requirements and constraints
+- Update PRD status to `1.2 - Initial brain dump complete`
 
-**Step 1: Pre-Implementation Setup**
-- **Task Selection**: Agent identifies next task from approved task list
-- **Scope Verification**: Confirm task scope aligns with PRD and no scope creep
-- **Branch Creation**: Create or use PRD-dedicated feature branch named `prd/<PRD-ID>-<short-description>`. Before creation check if the branch already exists. If it does, then use that branch
-- **Implementation Plan Review**: Review and confirm implementation approach with User if needed
+**1.3 Supporting Materials Linking**
+- Link relevant code files, ADRs, related PRDs
+- Embed supporting documentation references
+- Update PRD status to `1.3 - Supporting materials linked`
 
-**Step 2: Core Implementation**
-- **Code Implementation**: Execute task requirements strictly within defined scope
-- **Documentation Updates**: Update any required technical documentation inline with changes
-- **Implementation Documentation**: Document any deviations from planned approach in task file
+#### Phase 2: Validation and Refinement
+**2.1 Multi-Model PRD Validation**
+- Use [PRD validation prompt](/prompts/prd_validation_prompt.md)
+- Require minimum two different advanced AI models for cross-validation
+- Update PRD status to `2.1 - Multi-model validation complete`
 
-**Step 3: Demo Creation and Validation**
-> **Critical Gate**: No code commits or test implementation shall proceed until demo is validated
+**2.2 PRD Content Refinement**
+- Address validation feedback
+- Resolve identified gaps or ambiguities
+- Update PRD status to `2.2 - Content refinement complete`
 
-- **Demo Creation**: Agent creates a demonstration that proves the implemented functionality works as expected and covers ALL task requirements
-  - **Demo Purpose**: The demo serves as immediate, tangible proof that implementation meets requirements before investing time in formal testing
-  - **Demo Types**: Choose appropriate format based on task complexity:
-    - Simple tasks: Basic script or command demonstration
-    - Moderate tasks: Interactive demonstration or test harness
-    - Complex tasks: Comprehensive walkthrough covering all integration points
-  - **Demo Scope**: Must demonstrate ALL requirements and DOD criteria listed in task
-  - **Demo Documentation**: Include clear instructions for User to reproduce demo results
+**2.3 Validation Feedback Integration**
+- Incorporate final validation improvements
+- Update PRD status to `2.3 - Ready for architect review`
 
-- **User Demo Validation**: User reviews and approves demo
-  - **Validation Criteria**: Demo must prove all task requirements are met
-  - **Failure Protocol**: If demo fails, Agent must fix implementation before proceeding
-  - **Scope Validation**: Confirm no scope creep occurred during implementation
+#### Phase 3: Review and Approval
+**3.1 Architect Team Review**
+- Architect team reviews PRD comprehensively
+- May iterate back to any Phase 2 step if needed
+- Update PRD status to `3.1 - Under architect review`
 
-**Step 4: Test Implementation**
-- **Test Development**: Implement automated tests according to task's test plan
-- **Test Scope**: Tests must align with task complexity level and validation criteria
-- **Test Coverage**: Ensure tests cover all functionality demonstrated in the demo
-- **Test Documentation**: Update test documentation and ensure tests are properly integrated
+**3.2 Review Feedback Integration**
+- Address architect feedback
+- Make required PRD modifications
+- Update PRD status to `3.2 - Review feedback integrated`
 
-**Step 5: Final Validation and Integration**
-- **User Test Validation**: User reviews and approves implemented tests
-- **Validation Criteria Check**: Confirm all proportional validation criteria are met
-- **ADR Synchronization**: Update Architecture Decision Records if implementation required architectural decisions
-- **Final Documentation**: Complete any remaining documentation updates
+**3.3 Final PRD Approval**
+- Get explicit architect approval
+- Update PRD status to `3.3 - Approved for context analysis`
 
-**Step 6: Version Control Integration**
-- **Commit Creation**: Create commits with proper format `[<PRD-ID>-<TASK-ID>] <description>`
-- **Pull Request Decision**: 
-  - If current task is the last task in the PRD: Create PR with PRD linkage and implementation summary for all tasks
-  - If current task is NOT the last task in the PRD: Only create commit (no PR)
-- **User PR Review**: User approves pull request (only if PR was created)
-- **Merge to Main**: Complete merge using squash merge strategy (only if PR was created)
+#### Phase 4: Context Analysis and Task Planning  
+**4.1 Codebase Analysis and Context Gathering**
+- Agent analyzes codebase for relevant components
+- Gather references to files/systems requiring changes
+- Update PRD status to `4.1 - Context analysis complete`
+
+**4.2 PRD Context Updates**
+- Update PRD with gathered technical context
+- Add component references and dependencies
+- Update PRD status to `4.2 - Context integrated`
+
+**4.3 Task Decomposition**
+- Break down PRD using [Template Task](/template_task.md)
+- Follow task criteria: Agent-oriented language, demo-enabled, concise (≤150k tokens)
+- Exclude test implementation (tests created only after task validation)
+- Include ADR references where applicable
+- Identify parallel execution opportunities
+- Update PRD status to `4.3 - Tasks decomposed`
+
+**4.4 Task Complexity Assessment**
+- Assign complexity level (Simple/Moderate/Complex) per "Task Validation Criteria Proportionality"
+- Define proportional validation criteria for each task
+- Update PRD status to `4.4 - Complexity assessed`
+
+**4.5 Task List Architect Approval**
+- Get explicit approval for complete task list and validation criteria
+- Confirm task scope and parallel execution plan
+- Update PRD status to `4.5 - Approved for implementation`
+
+#### Phase 5: Task Implementation (Repeat per Task)
+**5.1 Individual Task Execution**
+- **Pre-Implementation Setup**:
+  - Create or use PRD-dedicated feature branch `prd/<PRD-ID>-<short-description>`
+  - Verify task scope aligns with PRD (no scope creep)
+  - Review implementation approach with Architect if needed
+- **Core Implementation**:
+  - Execute task requirements strictly within defined scope
+  - Update required technical documentation inline with changes
+  - Document any deviations from planned approach in task file
+- Update PRD status to `5.1 - Task [X] implementation complete`
+
+**5.2 Demo Creation and Validation** 
+> **Critical Gate**: No commits or test implementation proceed until demo is validated
+
+- **Demo Creation**: Create demonstration proving task completion
+  - Demo Types: Basic script (Simple), Interactive demo (Moderate), Comprehensive walkthrough (Complex)
+  - Must demonstrate ALL requirements and DOD criteria
+  - Include clear reproduction instructions for Architect
+- **Architect Demo Validation**: 
+  - Demo must prove all task requirements are met
+  - If demo fails: return to 5.1 for implementation fixes
+  - Confirm no scope creep occurred
+- Update PRD status to `5.2 - Task [X] demo validated`
+
+**5.3 Commit Creation**
+- **Test Implementation**: Develop tests according to task's test plan (aligned with complexity level)
+- **Final Validation**: Architect reviews and approves tests and validation criteria
+- **ADR Updates**: Update Architecture Decision Records if needed
+- **Commit Creation**: Create commits with format `[<PRD-ID>-<TASK-ID>] <description>`
+- Update PRD status to `5.3 - Task [X] committed`
+
+#### Phase 6: Testing Implementation
+**6.1 Test Planning**
+- Plan comprehensive testing for all implemented logic
+- Target 100% coverage of modified functionality
+- Prioritize quality over quantity (redundant coverage acceptable)
+- Update PRD status to `6.1 - Test planning complete`
+
+**6.2 Test Implementation**
+- Implement tests for all tasks and components
+- Ensure tests cover all functionality demonstrated in demos
+- Update PRD status to `6.2 - Tests implemented`
+
+**6.3 Test Validation**
+- Architect validates test coverage and quality
+- Update PRD status to `6.3 - Tests validated`
+
+#### Phase 7: Documentation and Integration
+**7.1 Documentation Updates**
+- Update all relevant documentation (ADRs, technical docs)
+- Ensure documentation matches implementation
+- Address any new aspects discovered during implementation
+- Update PRD status to `7.1 - Documentation updated`
+
+**7.2 ADR Synchronization**
+- Update Architecture Decision Records as needed
+- Document any new architectural decisions
+- Update PRD status to `7.2 - ADRs synchronized`
+
+**7.3 Final Documentation Review**
+- Architect reviews all documentation updates
+- Ensure current project documentation is complete
+- Update PRD status to `7.3 - Documentation approved`
+
+#### Phase 8: Process Reflection
+**8.1 Workflow Analysis**
+- Architect team analyzes completed workflow
+- Identify process strengths and weaknesses
+- Update PRD status to `8.1 - Workflow analyzed`
+
+**8.2 Improvement Identification**
+- Document specific improvement opportunities
+- Prioritize workflow enhancements for future PRDs
+- Update PRD status to `8.2 - Improvements identified`
+
+**8.3 Framework Updates**
+- Update policy/templates based on learnings
+- Document changes for future PRD workflows
+- Update PRD status to `8.3 - Framework updated`
+
+#### Phase 9: Final Integration
+**9.1 Pull Request Creation**
+- Create PR with PRD linkage and implementation summary for all tasks
+- Include all commits from PRD implementation
+- Update PRD status to `9.1 - PR created`
+
+**9.2 Final Architect Review**
+- Final comprehensive review of all changes
+- Approve pull request for merge
+- Update PRD status to `9.2 - Final review complete`
+
+**9.3 Merge to Main Branch**
+- Complete merge using squash merge strategy
+- Update PRD status to `9.3 - Merged to main - COMPLETE`
 
 ### Testing-Focused Development Workflow
 
@@ -113,7 +235,7 @@ It aims to eliminate ambiguity, reduce supervision needs, and facilitate automat
 
 1. **Early Validation**: Demos provide immediate feedback on whether implementation meets requirements before time is invested in formal testing
 2. **Scope Control**: Demos help identify scope creep early in the process when it's easier to correct
-3. **User Confidence**: Users can see tangible progress and provide course corrections before work is "locked in" through commits
+3. **Architect Confidence**: Architects can see tangible progress and provide course corrections before work is "locked in" through commits
 4. **Quality Gate**: Demos ensure functionality actually works in practice, not just in theory
 5. **Documentation Verification**: Demos prove that implementation matches documented requirements
 6. **Risk Mitigation**: Catching implementation issues at demo stage prevents cascading problems in tests and downstream work
@@ -121,17 +243,17 @@ It aims to eliminate ambiguity, reduce supervision needs, and facilitate automat
 #### Workflow Error Handling
 
 **Scope Creep Detection:**
-- Agent must immediately stop work and notify User if scope exceeds task boundaries
-- All scope conflicts resolved through explicit User decision and task document updates
+- Agent must immediately stop work and notify Architect if scope exceeds task boundaries
+- All scope conflicts resolved through explicit Architect decision and task document updates
 
 **Blocker Management:**
 - Agent must identify and report blockers immediately
-- Work stops until blockers are resolved through User intervention
+- Work stops until blockers are resolved through Architect intervention
 
 **Validation Failures:**
 - Demo validation failure: Return to Step 2 (Core Implementation)
 - Test validation failure: Return to Step 4 (Test Implementation)
-- Maximum 3 iteration cycles before escalating to User for guidance
+- Maximum 3 iteration cycles before escalating to Architect for guidance
 
 
 ## Task-Driven Development
@@ -144,7 +266,7 @@ It aims to eliminate ambiguity, reduce supervision needs, and facilitate automat
 ## Changes Approving Policy
 - **Prohibition of Unapproved Changes**: Any changes outside the explicit scope of an agreed task are EXPRESSLY PROHIBITED: could be proposed by the Agent during the task implementation as options to go with, but should never lead to the implementation of changes outside the scope of the task.
 
-- **Controlled File Creation**: The Agent shall not create any files, including standalone documentation files, that are outside the explicitly defined structures for PRDs (see "Default Project Layout"), tasks (see "Task Documentation and Process"), or source code, unless the User has given explicit prior confirmation for the creation of each specific file. This principle is to prevent the generation of unrequested or unmanaged documents.
+- **Controlled File Creation**: The Agent shall not create any files, including standalone documentation files, that are outside the explicitly defined structures for PRDs (see "Default Project Layout"), tasks (see "Task Documentation and Process"), or source code, unless the Architect has given explicit prior confirmation for the creation of each specific file. This principle is to prevent the generation of unrequested or unmanaged documents.
 
 ## Documentation
 - **Technical Documentation for APIs and Interfaces**: As part of completing any PRD that creates or modifies APIs, services, interfaces, or protocols, technical documentation must be created or updated explaining how to use these components. This documentation should include (but not limited to):
@@ -185,7 +307,7 @@ It aims to eliminate ambiguity, reduce supervision needs, and facilitate automat
 - All changes must be associated with a specific task.
 - No changes should be made outside the scope of the current task.
 - Any scope creep must be identified, rolled back, and addressed in a new task.
-- If the User asks to make a change without referring to a task, then the Agent MUST NOT do the work and must have a conversation about it to determine if it should be associated with an existing task or if a new PRD + task should be created.
+- If the Architect asks to make a change without referring to a task, then the Agent MUST NOT do the work and must have a conversation about it to determine if it should be associated with an existing task or if a new PRD + task should be created.
 
 
 # Default Project Layout
@@ -242,11 +364,11 @@ It aims to eliminate ambiguity, reduce supervision needs, and facilitate automat
 |---------|-------------|
 | `# [Task-ID] [Task-Name]` | Title of the task including its ID and name |
 | `# Links` | Links to the PRD, and other relevant documents |
-| `# Description` | A short description of the task (mainly for the User to keep track of the tasks) |
+| `# Description` | A short description of the task (mainly for the Architect to keep track of the tasks) |
 | `# Requirements and DOD` | Complete and unambiguous list of requirements and DOD (Definition of Done) |
 | `# Implementation Plan` | A detailed plan for the task, including the steps to be taken and the expected outcomes |
 | `# Test Plan` | Testing requirements for the task |
-| `# Verification and Validation` | User approval that validation criteria appropriate to task complexity have been met |
+| `# Verification and Validation` | Architect approval that validation criteria appropriate to task complexity have been met |
 | `## Architecture integrity` | Verification of architectural compliance |
 | `## Security` | Security validation |
 | `## Performance` | Performance validation |
@@ -306,7 +428,7 @@ It aims to eliminate ambiguity, reduce supervision needs, and facilitate automat
 ### Validation Assignment Rules
 - Task complexity level must be determined during task creation
 - Validation criteria must be explicitly listed in the task document
-- User must approve the validation level before task implementation begins
+- Architect must approve the validation level before task implementation begins
 - Additional validation criteria may be added if risks are identified during implementation
 
 
@@ -321,14 +443,14 @@ It aims to eliminate ambiguity, reduce supervision needs, and facilitate automat
 
 ## Scope Interpretation Conflicts
 
-- **Agent Uncertainty**: If the Agent is uncertain about task scope or requirements, work must stop and clarification must be requested from the User
-- **Scope Creep Detection**: If the Agent identifies potential scope creep during implementation, the User must be notified immediately with specific details
-- **Resolution Process**: All scope conflicts must be resolved through explicit User decision and task document updates
+- **Agent Uncertainty**: If the Agent is uncertain about task scope or requirements, work must stop and clarification must be requested from the Architect
+- **Scope Creep Detection**: If the Agent identifies potential scope creep during implementation, the Architect must be notified immediately with specific details
+- **Resolution Process**: All scope conflicts must be resolved through explicit Architect decision and task document updates
 
 ## Emergency Procedures
 
 - **Production Issues**: Critical production issues may bypass normal task creation process but must be documented within 24 hours
-- **Security Vulnerabilities**: Security issues take precedence over normal workflow but require immediate User notification
+- **Security Vulnerabilities**: Security issues take precedence over normal workflow but require immediate Architect notification
 - **Post-Emergency Documentation**: All emergency changes must be retroactively documented with proper task creation and validation
 
 ## Escalation Triggers
@@ -359,7 +481,7 @@ It aims to eliminate ambiguity, reduce supervision needs, and facilitate automat
 
 - **PR Title**: Must include PRD ID and clear description of all changes
 - **PR Description**: Must link to PRD document and summarize implementation approach for all tasks
-- **Review Process**: All PRs require User approval before merging
+- **Review Process**: All PRs require Architect approval before merging
 - **Merge Strategy**: Use squash merge to maintain clean history on main branch
 
 ## Change Tracking
