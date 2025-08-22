@@ -187,6 +187,26 @@ This implementation establishes a modern cryptographic foundation that simplifie
      - All storage handlers updated and compiled
      - Payment transaction code updated to single-key flow and compiled
      - Unit tests updated/added to verify max-id key retrieval and startup generation path; all tests pass
+ 
+4. **Audit Model Simplification (Single-Key Architecture Alignment)**
+   - **Current State**: Audit model and storage track per-record `ownKeyHash`, `contractorKeyHash`, `ownKeysSetHash`, and `contractorKeysSetHash` to support Lamport multi-key sets.
+   - **Proposed Changes**:
+     - Remove fields from audit model: `ownKeyHash`, `contractorKeyHash`, `ownKeysSetHash`, `contractorKeysSetHash`.
+     - Update class `AuditRecord` to drop these fields, related constructors, accessors, and serialization footprint.
+     - Update interface `AuditHandler` and implementations (SQLite and PostgreSQL) to remove these parameters from methods such as `saveFullAudit`, `saveOwnAuditPart`, `saveContractorAuditPart`, and any queries relying on key hashes.
+     - Remove `AuditHandler::isContainsKeyHash(...)` from the interface and both implementations; delete all usages (e.g., outdated key cleanup paths) and simplify logic accordingly.
+     - Update DB schemas used by the storage implementations to remove corresponding columns from audit tables (SQLite and PostgreSQL) while preserving audit numbers and amounts/balance fields.
+     - Adjust `BaseTrustLineTransaction` methods `getOwnSerializedAuditData` and `getContractorSerializedAuditData` to exclude key-hash and keys-set-hash data from serialization; update method signatures and all call sites.
+     - Update keychain audit conflict helpers `checkOwnConflictedSignature` and `checkContractorConflictedSignature` to drop key-hash parameters and work with a single key.
+     - Remove `checkKeysSetAppropriate(...)` and all usages since keys-set hashes are no longer used.
+     - Remove methods `ownPublicKeysHash()` and `contractorPublicKeysHash()` from `Keystore/TrustLineKeychain` interfaces and all call sites.
+     - Update unit/integration tests and fixtures to reflect removed fields, updated signatures, and simplified schemas so all tests compile.
+   - **Rationale**: With SPHINCS+ single reusable key per trust line, storing key hash and keys-set-hash is unnecessary.
+   - **Acceptance Criteria**:
+     - Code compiles after removing fields and method parameters/usages across `AuditRecord`, `AuditHandler` and its implementations, and transaction serialization helpers.
+     - Storage handlers (SQLite and PostgreSQL) compile with simplified audit schemas.
+     - All references to removed hash fields/methods are eliminated (including `isContainsKeyHash`, `ownPublicKeysHash`, `contractorPublicKeysHash`, and `checkKeysSetAppropriate`).
+     - Unit and integration tests compile successfully under the updated interfaces and schemas.
 
 #### Bug Fixes & Technical Improvements
 - **Key Exhaustion Elimination**: Remove all logic related to key depletion and availability counting

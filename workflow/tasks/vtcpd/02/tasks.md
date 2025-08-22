@@ -40,6 +40,13 @@ This PRD involves replacing the Lamport one-time signature scheme with SPHINCS+ 
 - **Dependencies**: Task 02-4 (schema simplified) and Task 02-5 (payment keys refactor)
 - **Estimated Duration**: 1-2 days
 
+### Task 02-7: Audit Model Simplification (Remove key hash fields)
+- **File**: `02-7-audit-model-simplification.md`
+- **Complexity**: Moderate
+- **Description**: Remove `ownKeyHash`, `contractorKeyHash`, `ownKeysSetHash`, and `contractorKeysSetHash` from audit model, interfaces, implementations, and DB schemas; update serialization and remove public key hash helpers in keychain.
+- **Dependencies**: Task 02-2 (Keychain migration), Task 02-4 (Schema simplification groundwork)
+- **Estimated Duration**: 3-4 days
+
 ## Task Dependencies
 ```
 02-1 (OpenSSL + SPHINCS+ Primitives)
