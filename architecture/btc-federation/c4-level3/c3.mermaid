@@ -1,0 +1,59 @@
+graph TD
+    Operator[Node Operator]
+    vTCPNode[vTCP Node]
+    ValidatorNetwork[Validator Network]
+    ConfigStore[Configuration Store]
+    BlockStorage[Block Storage]
+    KeyStore[Key Store]
+    
+    subgraph NodeApp [BTC Federation Node]
+        NodeCore[Core<br/><b>Component</b><br/><br/>Lifecycle and Orchestration]
+        
+        subgraph API [API]
+            PublicAPIService[Public API Service<br/><b>Component</b><br/><b>proto: gRPC</b><br/><br/>Public vTCP gRPC gateway]
+
+            InternalAPIService[Internal API Service<br/><b>Component</b><br/><b>proto: gRPC</b><br/><br/>Internal vTCP gRPC gateway]
+        end
+
+        ConsensusEngine[Consensus Engine<br/><b>Component</b><br/><b>proto: HotStuff</b><br/><br/>BFT protocol<br/>View management]
+        
+        NetworkManager[Network Manager<br/><b>Component</b><br/><br/>P2P communication<br/>Message serialization]
+        
+        StorageManager[Storage Manager<br/><b>Component</b><br/><br/>Block persistence<br/>Database abstraction]
+        
+        CryptoService[Crypto Service<br/><b>Component</b><br/><br/>Digital signatures<br/>Hash functions]
+        
+        MetricsCollector[Metrics Collector<br/><b>Component</b><br/><br/>Performance metrics<br/>Health monitoring]
+    end
+    
+    Operator --> InternalAPIService
+    vTCPNode --> PublicAPIService
+    NetworkManager <--> ValidatorNetwork
+    NodeCore --> ConfigStore
+    StorageManager --> BlockStorage
+    CryptoService --> KeyStore
+    
+    NodeCore --> ConsensusEngine
+    NodeCore --> NetworkManager
+    NodeCore --> StorageManager
+    NodeCore --> CryptoService
+    NodeCore --> PublicAPIService
+    NodeCore --> MetricsCollector
+    
+    ConsensusEngine -.-> NetworkManager
+    ConsensusEngine -.-> StorageManager
+    ConsensusEngine -.-> CryptoService
+    ConsensusEngine -.-> MetricsCollector
+    
+    PublicAPIService -.-> ConsensusEngine
+    PublicAPIService -.-> MetricsCollector
+    
+    classDef person fill:#08427b,stroke:#fff,stroke-width:2px,color:#fff
+    classDef component fill:#85bbf0,stroke:#fff,stroke-width:2px,color:#fff
+    classDef external fill:#999,stroke:#fff,stroke-width:2px,color:#fff
+    classDef storage fill:#d4edda,stroke:#155724,stroke-width:2px,color:#155724
+    
+    class Operator,vTCPNode person
+    class NodeCore,ConsensusEngine,NetworkManager,StorageManager,CryptoService,PublicAPIService,InternalAPIService,MetricsCollector component
+    class ValidatorNetwork external
+    class ConfigStore,BlockStorage,KeyStore storage
