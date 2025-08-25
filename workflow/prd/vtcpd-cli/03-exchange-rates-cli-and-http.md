@@ -76,7 +76,7 @@ vtcpd stores exchange rates in a platform-stable format as a pair of integers: v
      - Rules:
        - If all three `real_rate`, `value`, `shift` provided → validation error
        - If none or only part provided → validation error
-       - For `real_rate`: maximum 12 digits after decimal point; else validation error
+       - For `real_rate`: maximum 16 digits after decimal point; else validation error
        - `shift` must be within int16 range
        - Decimal scales map must contain both equivalents; else validation error
        - Convert `real_rate` to native (value, shift) and then apply scale adjustment: `shift -= (decimals_from - decimals_to)`
@@ -106,7 +106,7 @@ vtcpd stores exchange rates in a platform-stable format as a pair of integers: v
    - Real to native:
      - Normalize decimal to integer `value` with `shift` such that e.g. `0.123 → (123, -3)`, `0.00123 → (123, -5)`, `123.456 → (123456, 3)`, `1234 → (1234, 0)`
      - Apply scale difference: `shift -= (decimals_from - decimals_to)`
-     - Validate: `real_rate` has <= 12 fractional digits; `shift` fits int16 after adjustment
+     - Validate: `real_rate` has <= 16 fractional digits; `shift` fits int16 after adjustment
    - Native to real (for display): compute decimal string using `value`, `shift`, and scale map (inverse of the above), without rounding for negative shifts (truncate toward zero semantics as per vtcpd)
 
 4. Response Structures
@@ -120,7 +120,7 @@ vtcpd stores exchange rates in a platform-stable format as a pair of integers: v
    - Update `readme.md`:
      - Add HTTP endpoints (paths, params, examples, responses)
      - Add CLI usage for `rates`
-     - Explain native storage (value + shift) for platform stability; two input modes; conversion rules and precision caveats (12-decimal limit; truncation effects)
+     - Explain native storage (value + shift) for platform stability; two input modes; conversion rules and precision caveats (16-decimal limit; truncation effects)
 
 ### Non-Functional Requirements
 - Security: input validation; no external IO beyond existing node communication
@@ -157,7 +157,7 @@ vtcpd stores exchange rates in a platform-stable format as a pair of integers: v
 ## Test Plan (Proportional)
 - Simple manual tests and basic validations (since this PRD is implementation-focused):
   - Validation: reject when both `real_rate` and `value+shift` present or missing.
-  - Validation: `real_rate` fractional part length > 12 rejected.
+  - Validation: `real_rate` fractional part length > 16 rejected.
   - Validation: missing decimals map entry rejected.
   - Conversion correctness: sample cases 0.123, 0.00123, 123.456, 1234 with different equivalent scales.
   - Readbacks: `real_rate` computed matches expected truncation behavior for negative shifts.
@@ -180,7 +180,7 @@ Fixed constants for equivalent fractional digits: `101 → 2`, `1001 → 8`, `10
 
 ### Error Conditions (Examples)
 - 400: "real_rate and (value, shift) are mutually exclusive"
-- 400: "real_rate has more than 12 fractional digits"
+- 400: "real_rate has more than 16 fractional digits"
 - 400: "shift is out of int16 range"
 - 400: "unknown equivalent scale for {equivalent}"
 

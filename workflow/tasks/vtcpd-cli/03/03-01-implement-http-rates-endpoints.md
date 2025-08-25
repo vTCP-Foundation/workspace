@@ -22,7 +22,7 @@ Implement HTTP endpoints in vtcpd-cli to operate exchange rates introduced in vt
   - `DELETE /api/v1/node/rates/` → `ClearRates`
 - Validations for Set:
   - Exactly one mode required: `real_rate` XOR (`value` AND `shift`). If all three present or neither/missing pair → 400
-  - `real_rate` fractional part length ≤ 12, else 400
+  - `real_rate` fractional part length ≤ 16, else 400
   - `shift` must be int16, else 400
   - Decimals map must contain both `equivalent_from` and `equivalent_to`: `{101:2, 1001:8, 1002:8, 2002:6}`, else 400
 - Conversion rules for Set:
@@ -55,7 +55,7 @@ Implement HTTP endpoints in vtcpd-cli to operate exchange rates introduced in vt
   - GET list: verify count and array contents.
   - DELETE one: expect 200 and empty data; verify GET returns NotFound style (mapped to count=0 or 404 per existing conventions).
   - DELETE all: expect 200 and empty data; verify GET list empty.
-  - Validation negatives: both modes present → 400; more than 12 decimals → 400; missing scale → 400; out-of-range shift → 400.
+  - Validation negatives: both modes present → 400; more than 16 decimals → 400; missing scale → 400; out-of-range shift → 400.
 
 # Verification and Validation
 - Architect reviews endpoints, validations, and responses against PRD.

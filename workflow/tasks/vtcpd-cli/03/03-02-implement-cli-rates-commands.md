@@ -19,7 +19,7 @@ Implement CLI commands in vtcpd-cli for managing exchange rates, mirroring vtcpd
 - Update dispatch in `internal/cmd_handler/cmd_handler.go` and `internal/cmd_handler/cmd_handler_testing.go` to route `rates` command to the handler (no testing HTTP endpoints required).
 - Validations for set:
   - Exactly one mode used per subcommand invocation (enforced by subcommand split).
-  - For `set`: `real_rate` must have ≤ 12 fractional digits.
+  - For `set`: `real_rate` must have ≤ 16 fractional digits.
   - For `set-native`: `shift` must be int16.
   - Decimals map must contain both equivalents: `{101:2, 1001:8, 1002:8, 2002:6}`.
 - Conversion rules (shared with HTTP):
@@ -47,7 +47,7 @@ Implement CLI commands in vtcpd-cli for managing exchange rates, mirroring vtcpd
   - `vtcpd-cli rates --type list` → shows collection.
   - `vtcpd-cli rates --type del --from 1001 --to 2002` → success, empty data; verify removed.
   - `vtcpd-cli rates --type clear` → success, empty data; verify list empty.
-  - Negative cases: real more than 12 decimals; missing scales; shift overflow.
+  - Negative cases: real more than 16 decimals; missing scales; shift overflow.
 
 # Verification and Validation
 - Architect reviews CLI UX, outputs, error messages against PRD and existing style.
