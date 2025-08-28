@@ -9,6 +9,7 @@ Implement new transactions: `BaseCollectTopologyForExchangeTransaction`, `Initia
 # Requirements and DOD
 - New transactions respect semantics of `mEquivalent` (receiver currency) and `exchangeEquivalents` (payer set).
 - `InitiateMaxFlowExchangeCalculationCommand` implemented and registered with the command interface.
+- `InitiateMaxFlowExchangeCalculationCommand` validates exchangeEquivalents limit (maximum 5 elements) and returns error code 401 (responseProtocolError) for violations.
 - Forwarding of `exchangeEquivalents` in Source/Target Fst/Snd Level transactions per PRD.
 - `ExchangeRatesMessage` processing added via `fillRates()` in the exchange-aware base class.
 - Backward compatibility: legacy single-equivalent transactions send empty `exchangeEquivalents`.
@@ -28,6 +29,7 @@ Implement new transactions: `BaseCollectTopologyForExchangeTransaction`, `Initia
   - Source Fst Level dispatch: `equivalent = exchangeEquivalents[i]`, `exchangeEquivalents = { mEquivalent }`.
   - Target Fst Level dispatch: `equivalent = mEquivalent`, `exchangeEquivalents = <payer-set>`.
   - Rate collection/accumulation via `fillRates()`.
+  - `InitiateMaxFlowExchangeCalculationCommand` validation: test with 5 elements (pass), 6 elements (error 401).
 - Execute in `build-tests`.
 
 # Verification and Validation

@@ -186,16 +186,17 @@ This iteration establishes the foundation for:
      - InitiateMaxFlowExchangeCalculationTransaction implemented
      - CollectTopologyForExchangeTransaction implemented
      - Proper inheritance from base transaction classes
+     - exchangeEquivalents limited to maximum 5 elements with error code 401 (responseProtocolError) for violations
    - **Priority**: High
    - **Dependencies**: Unified contractor management
 
 4. **Unified Contractor ID Management**
-   - **Description**: Move contractor ID management from TopologyTrustLinesManager to ContractorsManager
+   - **Description**: Move contractor ID management from TopologyTrustLinesManager to EquivalentsSubsystemsRouter
    - **User Story**: As a system, I want consistent node identification across all equivalents for proper multi-equivalent flow calculation
    - **Rationale**: Enables unified flow calculation across different equivalents
-   - **Builds Upon**: Existing ContractorsManager infrastructure
+   - **Builds Upon**: Existing EquivalentsSubsystemsRouter infrastructure
    - **Acceptance Criteria**:
-     - mParticipantsAddresses moved to ContractorsManager
+     - mParticipantsAddresses moved to EquivalentsSubsystemsRouter
      - Consistent ID assignment across equivalents
      - All topology managers use unified ID system
    - **Priority**: High
@@ -234,7 +235,6 @@ This iteration establishes the foundation for:
 - Memory usage increase < 50MB for exchange rate storage
 
 #### Security
-- Exchange rate information transmission uses existing secure message channels
 - No validation of exchange rate authenticity (explicitly out of scope)
 
 #### Scalability
@@ -242,7 +242,7 @@ This iteration establishes the foundation for:
 - Handle exchange rate information from up to 100 exchange-capable nodes
 
 #### Reliability
-- Graceful error handling when OR-Tools library is unavailable
+- Node startup failure when OR-Tools library is unavailable or doesn't meet minimum version requirements
 - Automatic cleanup of expired exchange rate information
 - Fallback error reporting for failed multi-equivalent calculations
 
@@ -251,7 +251,7 @@ This iteration establishes the foundation for:
 - **Current Architecture**: Single-equivalent topology collection with separate ID spaces per equivalent
 - **Proposed Changes**: Unified contractor ID management and multi-equivalent aware topology collection
 - **Backwards Compatibility**: New transaction types maintain separation from existing single-equivalent operations
-- **Migration Requirements**: TopologyTrustLinesManager ID management migration to ContractorsManager
+- **Migration Requirements**: TopologyTrustLinesManager ID management migration to EquivalentsSubsystemsRouter
 
 ### Technology Stack Updates
 #### New Technologies/Libraries
@@ -331,7 +331,7 @@ This iteration establishes the foundation for:
   - Behavior mirrors the internal `mExchangeRates` TTL maintenance.
 
 #### Data Migration
-- Migration of mParticipantsAddresses from TopologyTrustLinesManager to ContractorsManager
+- Migration of mParticipantsAddresses from TopologyTrustLinesManager to EquivalentsSubsystemsRouter
 - No data format changes requiring migration
 
 ### OR-Tools Integration Specifications
@@ -557,23 +557,27 @@ switch (status) {
 ```
 
 #### Path Logging Format Specification
-**Format**: Each path logged as single line with node transitions showing flow amounts and equivalents:
-- **Node Format**: `NodeID:FlowAmount:Equivalent`
-- **Exchange Format**: `NodeID:InputFlow:FromEquiv→ToEquiv:OutputFlow` 
-- **Path Separator**: ` → ` (space-arrow-space)
+**Format**: Each path logged as single line with detailed node and flow information:
+- **Flow Element (F)**: `F(nodes: [address1 -> address2]; ids [id1 -> id2]; flow: amount; eq: equivalent)`
+- **Exchange Element (E)**: `E(node: address; id: nodeId; eqs [fromEq->toEq]; flows:[inputFlow->outputFlow])`
+- **Path Separator**: ` -> ` (space-arrow-space)
 
 **Examples**:
 ```
-Flow path: 0:100:1 → 5:100:1→2:85 → 10:85:2
-Flow path: 0:50:3 → 7:50:3 → 12:50:3→2:45 → 10:45:2
+Flow path: F(nodes: [127.0.0.1:2002 -> 127.0.0.1:2003]; ids [0 -> 1]; flow: 100; eq: 1) -> F(nodes: [127.0.0.1:2003 -> 127.0.0.1:2004]; ids [1 -> 2]; flow: 100; eq: 1) -> E(node: 127.0.0.1:2004; id:2; eqs [1->2]; flows:[100->85]) -> F(nodes:[127.0.0.1:2004->127.0.0.1:2005]; ids:[2->3]; flow:85; eq:2)
 ```
 
 Where:
-- `0` = sender node, `10` = receiver node
-- `5,7,12` = intermediate/exchange nodes  
-- `1,2,3` = equivalent IDs
-- Numbers after colon = flow amounts
-- `1→2:85` = exchange from equivalent 1 to equivalent 2 producing 85 units
+- **F (Flow)**: Represents flow between two nodes in same equivalent
+  - `nodes`: IP addresses of source and destination nodes
+  - `ids`: ContractorIDs of source and destination nodes
+  - `flow`: Amount of flow between nodes
+  - `eq`: Equivalent of the flow
+- **E (Exchange)**: Represents exchange operation at a single node
+  - `node`: IP address of exchange node
+  - `id`: ContractorID of exchange node
+  - `eqs`: Exchange direction (fromEquivalent->toEquivalent)
+  - `flows`: Flow transformation (inputAmount->outputAmount)
 
 #### CMake Integration Pattern
 ```cmake
@@ -591,8 +595,10 @@ if(ortools_FOUND)
 endif()
 ```
 
-#### Fallback Strategy
-**If OR-Tools unavailable**: Return error through existing result interface mechanisms. No fallback algorithm implementation - multi-equivalent exchange rate optimization requires sophisticated mathematical optimization that cannot be reasonably implemented without specialized LP solvers.
+#### Startup Requirements and Fallback Strategy
+**OR-Tools Availability Check**: Node must verify OR-Tools library availability and minimum version (>= 9.0) during startup. If OR-Tools is unavailable or version is insufficient, node must terminate with appropriate error message.
+
+**Runtime Fallback**: For individual calculation failures, return error through existing result interface mechanisms. No fallback algorithm implementation - multi-equivalent exchange rate optimization requires sophisticated mathematical optimization that cannot be reasonably implemented without specialized LP solvers.
 
 ## Implementation Plan
 ### This Iteration Timeline
@@ -765,8 +771,9 @@ endif()
 ##### InitiateMaxFlowExchangeCalculationCommand
 - **Inheritance**: Analog of `InitiateMaxFlowCalculationCommand`
 - **Key Fields**:
-  - `vector<SerializedEquivalent> exchangeEquivalents`: Sender's payment equivalents
+  - `vector<SerializedEquivalent> exchangeEquivalents`: Sender's payment equivalents (maximum 5 elements)
   - `SerializedEquivalent mEquivalent`: Receiver's target equivalent (reinterpreted)
+- **Validation**: Must reject commands with more than 5 exchangeEquivalents with error code 401 (responseProtocolError)
 - **Usage**: Input to `InitiateMaxFlowExchangeCalculationTransaction`
 
 #### New Message Classes
