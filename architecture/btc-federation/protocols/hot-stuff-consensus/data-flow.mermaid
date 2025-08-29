@@ -8,65 +8,223 @@ sequenceDiagram
     participant V as Validator Nodes
     participant LOG as Logging System
     
-    %% Message Types Legend
+    %% Protocol Version and Message Types Legend
+    Note over L,V: PROTOCOL: Simple (Non-Pipelined) HotStuff<br/>Direct commit upon CommitQC formation<br/>No chained/pipelined execution
     Note over CR: Signature scheme: SPHINCS+
     Note over C: QC = bitmap || {sig_i} (≥2f+1 SPHINCS+)<br/>Verification iterates over each sig_i
     Note over L,V: ProposalMsg(view, blockID, QC, leaderSig)<br/>VoteMsg(phase, blockID, sig)<br/>PrepareQC / PreCommitQC / CommitQC (quorumCert)<br/>TimeoutMsg(view, sig)<br/>NewViewMsg(view, highestQC, sig)<br/>StateSyncMsg(blocks, sigmap)<br/>EvidenceMsg(evidence, sig)
     
+    %% Network Model and Assumptions
+    rect rgb(255, 250, 240)
+        Note over N: Network Model: Partial Synchrony
+        Note over N: Before GST (Global Stabilization Time):
+        Note over N: - Messages may be delayed arbitrarily
+        Note over N: - No guaranteed delivery order
+        Note over N: - Network may partition
+        Note over N: After GST (unknown to nodes):
+        Note over N: - Messages delivered within Δ (known bound)
+        Note over N: - Reliable links between correct nodes
+        Note over N: - FIFO delivery per sender-receiver pair
+        
+        %% Message Delivery Guarantees
+        N->>N: Authenticated channels (all messages signed)
+        N->>N: Best-effort broadcast for proposals/QCs
+        N->>N: Reliable broadcast for evidence/timeouts
+        N->>N: Point-to-point for votes
+        
+        %% Network Parameters (512 participants, SPHINCS+ 256s)
+        Note over N: Max validators: 512 (f=170, 2f+1=341, need ≥342 signatures)
+        Note over N: SPHINCS+ 256s signature size: ~29KB per signature
+        Note over N: QC size: ~15MB (≥342 signatures @ 29KB each)
+        Note over N: Block size limit: 50MB (excluding QCs)
+        Note over N: ProposalMsg size: up to 65MB (block + QC)
+        Note over N: Maximum message delay Δ: 10 seconds (after GST)
+        Note over N: Required network bandwidth: ≥1 Gbps per node
+        Note over N: Assumed network: High-quality datacenter interconnect
+        Note over N: Maximum in-flight messages: 100 per peer (due to large size)
+        Note over N: Network buffer per peer: 256MB
+        
+        %% Bandwidth Calculations
+        Note over N: Peak bandwidth (worst case per view):
+        Note over N: - Receive proposal: 65MB
+        Note over N: - Send vote: 30KB * 3 phases = 90KB
+        Note over N: - Receive 3 QCs: 45MB
+        Note over N: - Total per view: ~110MB
+        Note over N: - At 1 second views: ~880 Mbps sustained
+        
+        %% Partition Handling
+        alt Network Partition Detected
+            N->>N: Monitor heartbeats from peers
+            N->>N: If <342 peers (2f+1) reachable for 3*Δ (30s)
+            C->>C: Enter partition mode - stop voting
+            C->>C: Continue collecting messages
+            C->>C: Wait for partition heal
+        else Partition Healed
+            N->>N: ≥342 peers reachable
+            C->>C: Request state sync
+            C->>C: Rejoin consensus at highest known view
+        end
+    end
+    
     Note over L,V: System starts with GenesisQC (view -1)
+    
+    %% Crash Recovery Protocol
+    rect rgb(245, 255, 245)
+        Note over C: On node restart/recovery
+        C->>S: Read last committed state
+        S->>S: Verify state checksum
+        alt Checksum valid
+            S-->>C: Return (view, lockedQC, highestQC, block_tree)
+            C->>C: Resume from consistent state
+            C->>C: Continue to normal operation
+        else Checksum invalid or partial write detected
+            S->>S: Revert to previous checkpoint
+            S-->>C: Return last known good state
+            C->>C: Request state sync from peers
+            C->>N: Send StateSyncRequest to peers
+            N->>V: Query latest committed state
+            V-->>N: Return committed blocks and QCs
+            N-->>C: Aggregate state from ≥f+1 peers
+            C->>C: Reconstruct consistent state
+            C->>S: Store recovered state atomically
+            S-->>C: State recovery complete
+        end
+    end
+    
+    %% Pacemaker Logic (Internal to Consensus Engine)
+    rect rgb(240, 245, 255)
+        Note over C: Consensus Engine Internal State (Simple HotStuff)
+        Note over C: Pacemaker State: {current_view, phase, timer_active, timeout_count}<br/>Phase ∈ {WAITING_NEW_VIEW, PROPOSING, PREPARE, PRECOMMIT, COMMIT}<br/>Leader Selection: hash(view) mod n<br/>Protocol: Simple (non-pipelined) HotStuff with direct commit
+        
+        C->>C: Initialize: view=0, phase=WAITING_NEW_VIEW, timeout_count=0
+        
+        %% Pacemaker Timer Management
+        Note over C: Phase timeout calculation:
+        Note over C: timeout(phase) = phase_base_timeout * 2^min(timeout_count, 10)
+        Note over C: Phase base timeouts: NEW_VIEW=4s, PROPOSE=2s, VOTE=1s each
+        
+        C->>C: [Pacemaker] start_phase_timer(phase)
+        Note over C: Timer runs in background, triggers on_timeout() if expires
+        
+        %% State Transition Rules
+        Note over C: Pacemaker State Transitions:
+        Note over C: WAITING_NEW_VIEW → PROPOSING: if is_leader(view) AND received ≥342 NewViews
+        Note over C: WAITING_NEW_VIEW → PREPARE: if received valid proposal
+        Note over C: PROPOSING → PREPARE: after broadcasting proposal
+        Note over C: PREPARE → PRECOMMIT: after receiving/forming PrepareQC
+        Note over C: PRECOMMIT → COMMIT: after receiving/forming PreCommitQC
+        Note over C: COMMIT → WAITING_NEW_VIEW: after receiving/forming CommitQC
+        Note over C: ANY_PHASE → WAITING_NEW_VIEW: on timeout (triggers view change)
+        
+        %% Vote Tracking
+        C->>C: [Pacemaker] Initialize vote trackers per phase
+        Note over C: vote_state[view][phase] = {voted: bool, vote_sent_to: blockID}
+        C->>C: [Pacemaker] before voting: check !vote_state[view][phase].voted
+        C->>C: [Pacemaker] after voting: vote_state[view][phase] = {true, blockID}
+        
+        %% View Management
+        C->>C: [Pacemaker] on entering new view: clear old vote states
+        C->>C: [Pacemaker] on timeout: increment timeout_count for backoff
+        C->>C: [Pacemaker] on successful phase: reset timeout_count to 0
+    end
+    
     Note over L,V: View v, Phase: Prepare
     
     %% Block Proposal Phase
-    L->>+C: Propose new block
-    C->>+BT: Get highest QC
-    BT-->>-C: Return highest QC
-    C->>+S: Get parent block
-    S-->>-C: Return parent block
-    C->>C: Create new block with QC
-    C->>+CR: Sign block proposal (LeaderSig)
-    CR-->>-C: Return leader signature
-    C->>+N: Broadcast(ProposalMsg)
-    N-->>-V: Send to all validators
+    L->>C: Propose new block
+    C->>C: Start NewView collection timer (2 * current_view_timeout)
+    C->>N: Collect NewView messages from ≥2f+1 validators
+    
+    alt Sufficient NewViews collected before timeout
+        N-->>C: Return NewView messages (≥2f+1)
+        C->>CR: Verify NewView signatures from distinct validators
+        CR-->>C: Signatures valid
+        C->>C: Set proposal.justify = maxQC among NewView messages
+        C->>C: If multiple maxQCs with same view, select deterministically (by block hash)
+        C->>S: Get parent block (parent = justify.block)
+        S-->>C: Return parent block
+        C->>C: Create new block with justify QC
+    else Timeout waiting for NewViews
+        N-->>C: Insufficient NewView messages
+        C->>C: Leader timeout - cannot propose in this view
+        C->>CR: Sign timeout message for current view
+        CR-->>C: Return timeout signature
+        C->>N: Broadcast timeout message
+        N-->>V: Trigger view change
+        Note over L,V: Skip to view change protocol
+    else Conflicting highestQCs
+        C->>C: Apply deterministic tie-breaking (prefer higher block hash)
+        C->>C: Set proposal.justify = selected QC
+        C->>S: Get parent block (parent = justify.block)
+        S-->>C: Return parent block
+        C->>C: Create new block with justify QC
+    end
+    C->>CR: Sign block proposal (LeaderSig)
+    CR-->>C: Return leader signature
+    C->>N: Broadcast(ProposalMsg)
+    N-->>V: Send to all validators
     
     Note over L,V: Validators receive proposal
     
     %% Prepare Phase Processing with Error Handling
-    V->>+N: Receive ProposalMsg
-    N->>+C: Forward proposal
+    V->>N: Receive ProposalMsg
+    N->>C: Forward proposal
     
     alt Valid Proposal Path
         C->>C: Validate view number
-        C->>+BT: Check parent exists
-        BT->>+S: Lookup parent block
-        S-->>-BT: Return parent
-        BT-->>-C: Parent validation result
-        C->>C: Ensure parent is highestQC.block or descendant of locked block
-        C->>+CR: Verify proposal signature
-        CR-->>-C: Signature valid
-        C->>C: Apply safety rules
-        C->>+BT: Add block to tree
-        BT->>+S: Store block
-        S-->>-BT: Block stored
-        BT-->>-C: Block added
-        C->>+CR: Sign prepare vote
-        CR-->>-C: Return vote signature
-        C->>+N: Send vote to leader
-        N-->>-L: Deliver vote
+        C->>C: Verify proposer is the designated leader for view v
+        C->>C: Validate block payload (transactions, size, timestamp)
+        C->>C: Verify block hash and merkle root
+        C->>C: Check block timestamp is within acceptable range
+        C->>BT: Check parent exists
+        BT->>S: Lookup parent block
+        S-->>BT: Return parent
+        BT-->>C: Parent validation result
+        C->>CR: Verify justify QC signatures (≥2f+1 distinct validators)
+        CR->>CR: Check each signature is from unique validator in current validator set
+        CR->>CR: Verify each validator has appropriate voting power
+        CR-->>C: Justify QC valid (≥2f+1 stake confirmed)
+        C->>C: Verify parent == justify.block
+        C->>C: Apply SAFENODE: (block extends from lockedQC.block) OR (justify.view > lockedQC.view)
+        C->>C: Ensure vote-once-per-view (no prior vote in this view)
+        C->>CR: Verify proposal signature
+        CR-->>C: Signature valid
+        C->>BT: Add block to tree
+        BT->>S: Store block
+        S-->>BT: Block stored
+        BT-->>C: Block added
+        C->>CR: Sign prepare vote
+        CR-->>C: Return vote signature
+        C->>N: Send vote to leader
+        N-->>L: Deliver vote
     else Invalid View Number
         C->>C: Reject proposal (wrong view)
-        C->>+N: Send view-change timeout
-        N-->>-V: Broadcast timeout
+        C->>N: Send view-change timeout
+        N-->>V: Broadcast timeout
     else Invalid Parent
         C->>C: Reject proposal (invalid parent)
         Note over C: No vote sent
+    else Invalid Justify QC
+        C->>CR: Verify justify QC signatures
+        CR-->>C: Justify QC invalid
+        C->>C: Reject proposal (justify QC fails verification or is stale vs parent)
+        Note over C: Potential byzantine behavior detected
+    else Parent Mismatch
+        C->>C: Verify parent == justify.block
+        C->>C: Reject proposal (parent != justify.block)
+        Note over C: Byzantine leader behavior
+    else SAFENODE Violation
+        C->>C: Reject proposal (SAFENODE predicate failed)
+        Note over C: No vote sent
+    else Duplicate Vote
+        C->>C: Check for existing vote in view
+        C->>C: Reject proposal (already voted in this view)
+        Note over C: Equivocation prevention
     else Invalid Signature
-        C->>+CR: Verify proposal signature
-        CR-->>-C: Signature invalid
+        C->>CR: Verify proposal signature
+        CR-->>C: Signature invalid
         C->>C: Reject proposal (bad signature)
         Note over C: Potential byzantine behavior detected
-    else Safety Rule Violation
-        C->>C: Reject proposal (safety violation)
-        Note over C: No vote sent
     else Network Failure
         N->>N: Message delivery failed
         Note over N: Timeout will trigger view change
@@ -75,28 +233,70 @@ sequenceDiagram
     Note over L,V: Leader collects prepare votes
     
     %% Prepare QC Formation with Error Handling
-    L->>+C: Receive prepare votes
+    L->>C: Receive prepare votes
+    C->>C: Initialize vote accumulator for (view, phase=prepare, block)
     
-    alt Sufficient Votes (≥2f+1)
-        C->>C: Check vote threshold (2f+1)
-        C->>+CR: Verify vote signatures
-        CR-->>-C: Signatures valid
-        C->>C: Form Prepare QC
-        C->>+S: Store prepare QC
-        S-->>-C: QC stored
-        Note over S: fsync to disk
-        C->>+N: Broadcast(PrepareQC)
-        N-->>-V: Send PrepareQC to validators
+    alt Vote Processing Loop
+        loop Until QC formed or timeout
+            C->>C: Accept vote if: same view AND same phase AND same block
+            C->>C: Reject duplicate votes from same validator (keep first)
+            C->>C: Maintain vote bitmap to track validators
+            
+            alt Vote for different block in same view/phase
+                C->>C: Store as evidence of equivocation
+                C->>S: Log byzantine evidence (validator, view, phase, block1, block2)
+                S-->>C: Evidence stored
+                C->>C: Exclude validator from this round's QC
+            else Late vote from previous view/phase
+                C->>C: Discard vote (stale)
+            else Vote from future view
+                C->>C: Buffer vote for potential view change
+                C->>C: If ≥f+1 future votes, consider early view change
+            end
+            
+            C->>C: Check if valid votes ≥2f+1
+            alt Sufficient valid votes
+                C->>C: Check vote threshold (≥2f+1 distinct validators)
+                C->>C: Ensure all counted votes reference same block and view
+                C->>CR: Verify vote signatures from unique validators
+                CR->>CR: Check each signature is from unique validator in current validator set
+                CR->>CR: Verify each validator has appropriate voting power
+                CR-->>C: Signatures valid (≥2f+1 stake confirmed)
+                C->>C: Form QC with bitmap and aggregated signatures
+                C->>C: Stop accepting votes for this (view, phase)
+                C->>C: Prepare atomic write batch
+                C->>S: BEGIN TRANSACTION
+                S->>S: Write PrepareQC data with version number
+                S->>S: Write view number update
+                S->>S: Write vote bitmap and signatures
+                S->>S: Calculate and write state checksum
+                alt Write successful
+                    S->>S: COMMIT with fsync
+                    S-->>C: QC stored atomically
+                    C->>C: Update in-memory state
+                else Write failed or crash
+                    S->>S: ROLLBACK
+                    S-->>C: Storage error
+                    C->>C: Retain previous consistent state
+                    C->>C: Trigger recovery protocol
+                end
+                C->>N: Broadcast(PrepareQC)
+                N-->>V: Send PrepareQC to validators
+            else Timeout reached
+                C->>C: Stop vote collection
+                C->>C: Proceed to timeout handling
+            end
+        end
     else Insufficient Votes
         C->>C: Timeout waiting for votes
-        C->>+CR: Sign timeout message
-        CR-->>-C: Return timeout signature
-        C->>+N: Broadcast timeout
-        N-->>-V: Send timeout to validators
+        C->>CR: Sign timeout message
+        CR-->>C: Return timeout signature
+        C->>N: Broadcast timeout
+        N-->>V: Send timeout to validators
         Note over L,V: View change triggered
     else Invalid Vote Signatures
-        C->>+CR: Verify vote signatures
-        CR-->>-C: Some signatures invalid
+        C->>CR: Verify vote signatures
+        CR-->>C: Some signatures invalid
         C->>C: Reject invalid votes
         Note over C: Continue waiting or timeout
     else Equivocation Detected
@@ -108,89 +308,147 @@ sequenceDiagram
     Note over L,V: Pre-Commit Phase begins
     
     %% Pre-Commit Phase
-    C->>+N: Broadcast(PrepareQC)
-    N-->>-V: Send QC to validators
-    V->>+C: Receive PrepareQC
-    C->>+CR: Verify all QC signatures
-    CR-->>-C: QC valid
-    C->>C: Update locked block
-    C->>+CR: Sign pre-commit vote  
-    CR-->>-C: Return vote signature
-    C->>+N: Send pre-commit vote
-    N-->>-L: Deliver vote
+    Note over L,V: PrepareQC already broadcast in previous phase
+    V->>C: Receive PrepareQC
+    C->>CR: Verify all QC signatures (≥2f+1 distinct validators)
+    CR->>CR: Check each signature is from unique validator in current validator set
+    CR->>CR: Verify total stake of signers ≥2f+1
+    CR-->>C: QC valid
+    C->>C: If PrepareQC.view ≥ lockedQC.view, set lockedQC = PrepareQC.block
+    C->>C: Ensure vote-once-per-view-per-phase (no prior pre-commit vote)
+    C->>CR: Sign pre-commit vote  
+    CR-->>C: Return vote signature
+    C->>N: Send pre-commit vote
+    N-->>L: Deliver vote
     
     %% Pre-Commit QC Formation
-    L->>+C: Collect pre-commit votes
-    C->>C: Check vote threshold (2f+1)
-    C->>+CR: Verify vote signatures
-    CR-->>-C: Signatures valid
+    L->>C: Collect pre-commit votes
+    C->>C: Check vote threshold (≥2f+1 distinct validators)
+    C->>C: Ensure all counted votes reference same block and view
+    C->>CR: Verify vote signatures from unique validators
+    CR->>CR: Check each signature is from unique validator in current validator set
+    CR->>CR: Verify each validator has appropriate voting power
+    CR-->>C: Signatures valid (≥2f+1 stake confirmed)
     C->>C: Form Pre-Commit QC
-    C->>+S: Store pre-commit QC
-    S-->>-C: QC stored
-        Note over S: fsync to disk
+    C->>C: Prepare atomic write batch
+    C->>S: BEGIN TRANSACTION
+    S->>S: Write PreCommitQC data with version number
+    S->>S: Write view number update
+    S->>S: Write lockedQC update (if applicable)
+    S->>S: Write block tree updates
+    S->>S: Calculate and write state checksum
+    alt Write successful
+        S->>S: COMMIT with fsync
+        S-->>C: QC stored atomically
+        C->>C: Update in-memory state
+    else Write failed or crash
+        S->>S: ROLLBACK
+        S-->>C: Storage error
+        C->>C: Retain previous consistent state
+        C->>C: Trigger recovery protocol
+    end
     
     Note over L,V: Commit Phase begins
     
     %% Commit Phase
-    C->>+N: Broadcast(PreCommitQC)
-    N-->>-V: Send QC to validators
-    V->>+C: Receive PreCommitQC
-    C->>+CR: Verify all QC signatures
-    CR-->>-C: QC valid
-    C->>+CR: Sign commit vote
-    CR-->>-C: Return vote signature
-    C->>+N: Send commit vote
-    N-->>-L: Deliver vote
+    C->>N: Broadcast(PreCommitQC)
+    N-->>V: Send QC to validators
+    V->>C: Receive PreCommitQC
+    C->>CR: Verify all QC signatures (≥2f+1 distinct validators)
+    CR->>CR: Check each signature is from unique validator in current validator set
+    CR->>CR: Verify total stake of signers ≥2f+1
+    CR-->>C: QC valid
+    C->>C: Ensure vote-once-per-view-per-phase (no prior commit vote)
+    C->>CR: Sign commit vote
+    CR-->>C: Return vote signature
+    C->>N: Send commit vote
+    N-->>L: Deliver vote
     
     %% Commit QC Formation
-    L->>+C: Collect commit votes
-    C->>C: Check vote threshold (2f+1)
-    C->>+CR: Verify vote signatures
-    CR-->>-C: Signatures valid
+    L->>C: Collect commit votes
+    C->>C: Check vote threshold (≥2f+1 distinct validators)
+    C->>C: Ensure all counted votes reference same block and view
+    C->>CR: Verify vote signatures from unique validators
+    CR->>CR: Check each signature is from unique validator in current validator set
+    CR->>CR: Verify each validator has appropriate voting power
+    CR-->>C: Signatures valid (≥2f+1 stake confirmed)
     C->>C: Form Commit QC
-    C->>+S: Store commit QC
-    S-->>-C: QC stored
-        Note over S: fsync to disk
+    C->>C: Prepare atomic write batch
+    C->>S: BEGIN TRANSACTION
+    S->>S: Write CommitQC data with version number
+    S->>S: Write view number update
+    S->>S: Write committed height update
+    S->>S: Write block tree updates
+    S->>S: Calculate and write state checksum
+    alt Write successful
+        S->>S: COMMIT with fsync
+        S-->>C: QC stored atomically
+        C->>C: Update in-memory state
+    else Write failed or crash
+        S->>S: ROLLBACK
+        S-->>C: Storage error
+        C->>C: Retain previous consistent state
+        C->>C: Trigger recovery protocol
+    end
+        Note over L: Leader can decide immediately upon CommitQC formation
     
     Note over L,V: Decide Phase begins
     
-    %% Decide Phase & Block Commit
-    C->>+N: Broadcast(CommitQC)
-    N-->>-V: Send QC to validators
-    V->>+C: Receive CommitQC
-    C->>+CR: Verify all QC signatures
-    CR-->>-C: QC valid
-    C->>+BT: Mark block as committed
-    BT->>+S: Update committed height
-    S-->>-BT: Height updated
-    BT-->>-C: Block committed
+    %% Decide Phase & Block Commit (Simple HotStuff - Direct Commit)
+    C->>N: Broadcast(CommitQC)
+    N-->>V: Send QC to validators
+    V->>C: Receive CommitQC
+    C->>CR: Verify all QC signatures (≥2f+1 distinct validators)
+    CR->>CR: Check each signature is from unique validator in current validator set
+    CR->>CR: Verify total stake of signers ≥2f+1
+    CR-->>C: QC valid
+    Note over C: Simple HotStuff: Direct commit of block referenced by CommitQC<br/>(Not pipelined: no two-chain rule, no indirect commit)
+    C->>BT: Mark block as committed (simple HotStuff rule)
+    BT->>S: Update committed height
+    S-->>BT: Height updated
+    BT-->>C: Block committed
     C->>C: Emit committed block event
     C->>LOG: Append block metric
     
-    Note over L,V: Block committed, move to next view
+    Note over L,V: Block committed directly (simple HotStuff), move to next view
     
     %% View Change & Recovery Scenarios
     rect rgb(255, 240, 240)
         Note over L,V: View Change Scenarios
+        Note over C: Pacemaker responsibilities (timeouts, NewView processing, leader rotation, view management)
         
         alt Timeout in Any Phase
-            C->>C: Phase timeout detected
-            Note over C: Timeout = baseTimeout * 2^view
-            C->>+CR: Sign timeout message
-            CR-->>-C: Return signature
-            C->>+N: Broadcast timeout
-            N-->>-V: Send to validators
+            C->>C: [Pacemaker] Phase timeout detected
+            Note over C: Timeout = min(baseTimeout * 2^min(view, 10), maxTimeout)<br/>baseTimeout=1s, maxTimeout=60s
+            C->>CR: Sign timeout message
+            CR-->>C: Return signature
+            C->>N: Broadcast timeout
+            N-->>V: Send to validators
             V->>C: Collect timeout messages (≥2f+1)
-            C->>C: Advance to next view
-            C->>+N: Broadcast(NewViewMsg, highestQC)
-            N-->>-L: Deliver NewView to new leader
+            C->>C: [Pacemaker] Advance to next view
+            C->>C: [Pacemaker] Wait for view synchronization
+            
+            alt Fast path - recent QC available
+                C->>C: Include highest QC from previous 3 views in NewView
+            else Slow path - synchronization needed
+                C->>N: Request ViewSync from ≥f+1 validators
+                N->>V: Query current view and highestQC
+                V-->>N: Return (view_number, highestQC)
+                N-->>C: Aggregate responses
+                C->>C: Set local view = max(received_views)
+                C->>C: Update lockedQC if higher QC received
+            end
+            
+            C->>C: [Pacemaker] Enter synchronized view
+            C->>N: [Pacemaker] Broadcast(NewViewMsg, view, highestQC)
+            N-->>L: Deliver NewView to new leader
             Note over L: Collect NewViewMsg (≥2f+1)
-            C->>C: Select new leader (round-robin)
+            C->>C: [Pacemaker] Select new leader (round-robin)
         else Leader Failure
             Note over L: Leader becomes unresponsive
-            V->>V: Detect leader silence
-            V->>+N: Broadcast blame message
-            N-->>-V: Propagate blame
+            V->>V: [Pacemaker] Detect leader silence
+            V->>N: Broadcast blame message
+            N-->>V: Propagate blame
             C->>C: Trigger view change
         else Network Partition
             Note over N: Network splits
@@ -199,47 +457,480 @@ sequenceDiagram
         end
     end
     
-    %% Sync & Recovery Protocol
+    %% State Synchronization Protocol
     rect rgb(240, 255, 240)
-        Note over L,V: Recovery & Sync Protocol
+        Note over L,V: State Synchronization with Verification
         
         alt Node Behind (Missing Blocks)
-            C->>+N: LatestStateReq
-            N->>+V: Query latest committed state
-            V-->>-N: Return committed blocks
-            N-->>-C: StateSyncMsg
-            C->>+BT: Reconstruct block tree
-            BT->>+S: Store recovered blocks
-            S-->>-BT: Blocks stored
-            BT-->>-C: Tree updated
-        else Conflicting Forks
-            C->>+BT: Detect fork conflict
-            BT->>+C: Return competing chains
-            C->>C: Apply fork choice rule (highestQC / highest view number)
-            C->>+BT: Prune invalid branches
-            BT-->>-C: Tree pruned
+            C->>C: Detect fallen behind (view < network_view - SYNC_THRESHOLD)
+            C->>N: Send StateSyncRequest{from_height, to_view, include_proofs=true}
+            N->>V: Query ≥171 peers (f+1) for state
+            
+            %% Peers prepare response
+            V->>V: Collect requested blocks and QCs
+            V->>V: Build Merkle tree of block hashes
+            V->>V: Include QC chain from from_height to latest
+            V->>V: Sign response with node signature
+            V-->>N: StateSyncResponse{blocks[], qcs[], merkle_root, merkle_proofs[], signature}
+            
+            %% Verify and merge responses
+            N-->>C: Aggregate ≥171 responses
+            
+            C->>C: Verify each response:
+            C->>CR: Verify response signatures
+            CR-->>C: Signatures valid
+            C->>C: Verify Merkle proofs for each block
+            C->>C: Verify QC chain continuity
+            C->>C: Verify each QC has ≥342 valid signatures
+            C->>C: Check blocks form valid chain (parent hashes)
+            
+            alt All verifications pass
+                C->>C: Find common ancestor with local chain
+                C->>BT: Apply state updates
+                BT->>BT: Verify no conflicts with locked blocks
+                BT->>BT: Update block tree with new blocks
+                BT->>BT: Update committed height
+                BT-->>C: State synchronized
+                
+                %% Persist synchronized state
+                C->>S: Store synchronized state atomically
+                S->>S: BEGIN TRANSACTION
+                S->>S: Write all blocks with verification status
+                S->>S: Write QC chain
+                S->>S: Update sync checkpoint
+                S->>S: Calculate and store state checksum
+                S->>S: COMMIT with fsync
+                S-->>C: Sync persisted
+                
+            else Verification failed
+                C->>C: Mark responding peers as potentially Byzantine
+                C->>C: Request from different peer set
+                C->>LOG: Log sync verification failure
+            else Conflicting responses
+                C->>C: Compare ≥171 responses for consistency
+                C->>C: Accept majority consistent state
+                C->>C: Report Byzantine peers with conflicts
+            end
+            
+        else Fast Sync (Checkpoint-based)
+            C->>N: Request latest checkpoint from ≥342 peers (2f+1)
+            N->>V: Query checkpoint (height, state_hash, QC)
+            V-->>N: Return signed checkpoint
+            N-->>C: Collect checkpoint responses
+            
+            C->>C: Verify ≥342 matching checkpoints
+            C->>N: Download checkpoint state
+            N-->>C: State snapshot with proofs
+            C->>C: Verify snapshot against checkpoint hash
+            C->>S: Load checkpoint atomically
+            S-->>C: Checkpoint loaded
+        end
+        
+        %% Rate Limiting
+        Note over N: Sync rate limits:
+        Note over N: - Max 1 sync request per peer per minute
+        Note over N: - Max 1000 blocks per sync response
+        Note over N: - Max 50MB per sync message (except full proposals)
+        Note over N: - Exponential backoff on failed syncs
+    end
+    
+    %% Byzantine Behavior Detection & Tracking
+    rect rgb(255, 245, 245)
+        Note over L,V: Byzantine Behavior Detection & Comprehensive Tracking
+        
+        %% Initialize Tracking System
+        C->>LOG: Initialize malicious behavior tracker
+        Note over LOG: Tracker maintains: {validator_id, behavior_type, evidence, timestamp, view, victims}
+        
+        %% Equivocation Detection (Double Voting)
+        alt Equivocation Detection
+            C->>C: Detect double voting (same validator, same view/phase, different blocks)
+            C->>C: Collect both conflicting votes as evidence
+            C->>LOG: Log EQUIVOCATION event with full details
+            Note over LOG: {validator: X, type: "double_vote", view: V, phase: P,<br/>block1: hash1, sig1: bytes, block2: hash2, sig2: bytes,<br/>timestamp: T, potential_victims: [affected_nodes]}
+            C->>S: Store cryptographic evidence permanently
+            S->>S: Write both votes with signatures to evidence store
+            S->>S: Calculate evidence hash for future reference
+            S-->>C: Evidence stored with ID
+            C->>N: Broadcast EvidenceMsg(EQUIVOCATION, validator, proofs, signature)
+            N-->>V: Propagate to all validators for awareness
+            C->>C: Exclude validator from current and future QCs in this view
+            C->>C: Mark validator as Byzantine in memory (no slashing)
+            
+        else Invalid QC Received
+            C->>CR: Verify QC integrity (signatures, bitmap, threshold)
+            CR-->>C: QC verification failed
+            C->>C: Identify specific failure mode
+            alt Forged signatures
+                C->>LOG: Log FORGED_QC event
+                Note over LOG: {leader: X, type: "forged_qc", view: V,<br/>invalid_sigs: [list], claimed_validators: [list],<br/>qc_hash: H, timestamp: T}
+            else Insufficient stake
+                C->>LOG: Log INVALID_QC_STAKE event
+                Note over LOG: {leader: X, type: "insufficient_stake", view: V,<br/>claimed_stake: S1, actual_stake: S2, signers: [list]}
+            else Duplicate validators in QC
+                C->>LOG: Log QC_DUPLICATION event
+                Note over LOG: {leader: X, type: "duplicate_validators", view: V,<br/>duplicated: [list], qc_data: bytes}
+            end
+            C->>S: Store invalid QC with analysis
+            S-->>C: Evidence archived
+            C->>C: Reject QC and mark leader as potentially Byzantine
+            
+        else Conflicting Proposals (Same View)
+            C->>C: Detect multiple proposals for same view from same leader
+            C->>LOG: Log CONFLICTING_PROPOSALS event
+            Note over LOG: {leader: X, type: "conflicting_proposals", view: V,<br/>proposal1: {block: B1, justify: Q1, sig: S1, recipients: [list]},<br/>proposal2: {block: B2, justify: Q2, sig: S2, recipients: [list]},<br/>timestamp: T, network_partition: possible}
+            C->>S: Store both proposals with full data
+            S-->>C: Evidence logged
+            C->>N: Broadcast evidence to network
+            N-->>V: Alert all validators
+            C->>C: Leader marked Byzantine for this view
+            
+        else Fork Detection & Resolution
+            C->>BT: Detect competing chains at same height
+            BT-->>C: Return fork details {chain1, chain2, fork_point}
+            
+            %% Enhanced Fork Choice Rule
+            C->>C: Apply fork choice rule (in priority order):
+            C->>C: 1. Chain with higher locked QC view
+            C->>C: 2. Chain with more cumulative QC stake
+            C->>C: 3. Chain with valid CommitQC (if any)
+            C->>C: 4. Deterministic tie-break by chain head hash
+            
+            C->>LOG: Log FORK_DETECTED event
+            Note over LOG: {type: "fork", view: V, height: H,<br/>chain1: {head: H1, locked_qc: Q1, stake: S1},<br/>chain2: {head: H2, locked_qc: Q2, stake: S2},<br/>resolution: "chose_chain1", reason: "higher_locked_qc"}
+            
+            %% Check for Byzantine behavior in fork
+            C->>C: Analyze if fork was caused by Byzantine behavior
+            alt Byzantine fork (conflicting QCs exist)
+                C->>LOG: Log BYZANTINE_FORK event
+                Note over LOG: {type: "byzantine_fork", perpetrator: X,<br/>evidence: [conflicting_qcs], affected_height: H}
+                C->>S: Store fork evidence
+                S-->>C: Evidence stored
+            else Natural fork (network delay in simple HotStuff)
+                C->>LOG: Log NATURAL_FORK event
+                Note over LOG: {type: "natural_fork", cause: "network_delay",<br/>duration: D, affected_validators: N}<br/>Note: Simple HotStuff may have temporary forks during view changes
+            end
+            
+            C->>BT: Prune losing fork
+            BT->>BT: Mark orphaned blocks
+            BT->>LOG: Log pruned blocks for audit
+            BT-->>C: Fork resolved
+            
+        else Invalid Block Proposal
+            C->>C: Detect invalid block (bad payload, timestamp, etc.)
+            C->>LOG: Log INVALID_BLOCK event
+            Note over LOG: {proposer: X, type: "invalid_block", view: V,<br/>block: B, violations: [list], timestamp: T}
+            C->>S: Store invalid block for analysis
+            S-->>C: Block archived
+            C->>C: Reject proposal, no vote sent
+            
+        else Timeout Spam Detection
+            C->>C: Detect excessive timeouts from validator
+            alt Timeout rate > threshold
+                C->>LOG: Log TIMEOUT_SPAM event
+                Note over LOG: {validator: X, type: "timeout_spam",<br/>timeout_count: N, time_window: W, views: [list]}
+                C->>C: Temporarily ignore timeouts from validator
+            end
+            
+        else Vote Without Proposal
+            C->>C: Receive vote for unknown proposal
+            C->>LOG: Log PHANTOM_VOTE event
+            Note over LOG: {voter: X, type: "phantom_vote", view: V,<br/>claimed_block: B, phase: P, no_proposal_seen: true}
+            C->>C: Request proposal from voter (may be network issue)
+            
+        else Premature Vote
+            C->>C: Detect vote sent before appropriate phase
+            C->>LOG: Log PREMATURE_VOTE event
+            Note over LOG: {voter: X, type: "premature_vote", view: V,<br/>current_phase: P1, vote_phase: P2, timestamp: T}
+        end
+        
+        %% Periodic Malicious Behavior Report
+        loop Every 100 views
+            C->>LOG: Generate Byzantine behavior summary
+            LOG->>LOG: Aggregate by validator and behavior type
+            LOG->>LOG: Calculate reputation scores (not used for slashing)
+            LOG->>S: Persist summary report
+            S-->>LOG: Report stored
+            LOG->>C: Return summary for monitoring
+            Note over LOG: Summary: {period: [V1,V2], total_incidents: N,<br/>by_validator: {X: count, Y: count},<br/>by_type: {equivocation: N1, invalid_qc: N2, ...}}
+        end
+        
+        Note over LOG: All malicious behavior logs are:<br/>- Timestamped with wall clock and view number<br/>- Cryptographically signed by detecting node<br/>- Include full evidence for forensic analysis<br/>- Permanently stored (never pruned by GC)<br/>- Available for external audit/analysis tools
+    end
+    
+    %% Enhanced Equivocation Evidence Processing
+    rect rgb(255, 240, 250)
+        Note over L,V: Enhanced Equivocation Evidence Verification & Propagation
+        
+        alt Equivocation Evidence Received from Network
+            N->>C: Receive EvidenceMsg from peer
+            
+            %% Evidence Verification
+            C->>C: Verify evidence structure and completeness
+            C->>CR: Verify both conflicting signatures are valid
+            CR->>CR: Check sig1 is from claimed validator
+            CR->>CR: Check sig2 is from same validator  
+            CR->>CR: Verify both signatures are for same view/phase
+            CR->>CR: Verify blocks/votes are actually different
+            CR-->>C: Evidence cryptographically valid
+            
+            %% Evidence Deduplication
+            C->>C: Check if evidence already processed
+            C->>S: Query evidence store by hash(evidence)
+            alt New evidence
+                C->>C: Verify evidence is within EVIDENCE_WINDOW (1000 views)
+                alt Evidence too old
+                    C->>C: Reject stale evidence
+                    C->>LOG: Log STALE_EVIDENCE_REJECTED
+                else Evidence within window
+                    %% Store and Process
+                    C->>S: Store verified evidence atomically
+                    S->>S: BEGIN TRANSACTION
+                    S->>S: Write evidence with verification status
+                    S->>S: Update validator Byzantine status
+                    S->>S: COMMIT
+                    S-->>C: Evidence stored
+                    
+                    %% Controlled Propagation
+                    C->>C: Check propagation rate limit
+                    Note over C: Max 10 evidence msgs per view per validator
+                    alt Under rate limit
+                        C->>N: Rebroadcast verified evidence (once only)
+                        N->>N: Mark evidence as forwarded
+                        N-->>V: Propagate to peers who haven't seen it
+                    else Rate limit exceeded
+                        C->>LOG: Log EVIDENCE_RATE_LIMITED
+                        C->>C: Queue for next view
+                    end
+                    
+                    %% Update Local State
+                    C->>C: Mark validator as Byzantine
+                    C->>C: Exclude from ongoing vote collection
+                    C->>C: Reject future messages from validator in this view
+                end
+            else Duplicate evidence
+                C->>C: Evidence already processed, ignore
+            else Invalid evidence
+                C->>LOG: Log FALSE_EVIDENCE_ATTEMPT
+                Note over LOG: {accuser: X, type: "false_evidence",<br/>claimed_equivocator: Y, reason: "invalid_sigs"}
+                C->>C: Mark accuser as potentially Byzantine
+                C->>C: Do not propagate false evidence
+            end
+        end
+        
+        %% Evidence Consensus (Optional - for critical decisions)
+        alt Critical evidence requiring consensus
+            C->>C: Collect evidence confirmations from peers
+            loop Until ≥171 confirmations (f+1) or timeout
+                C->>N: Request evidence confirmation from peers
+                N->>V: Have you seen this evidence?
+                V-->>N: Yes/No with signature
+                N-->>C: Collect confirmations
+            end
+            
+            alt ≥171 confirmations received
+                C->>C: Evidence confirmed by network
+                C->>LOG: Log EVIDENCE_CONFIRMED
+                C->>C: Apply permanent Byzantine marking
+            else Insufficient confirmations
+                C->>LOG: Log EVIDENCE_UNCONFIRMED
+                C->>C: Treat as unverified, continue monitoring
+            end
         end
     end
     
-    %% Byzantine Behavior Detection
-    rect rgb(255, 245, 245)
-        Note over L,V: Byzantine Behavior Handling
+    %% Leader Proposal Rate Limiting & DOS Protection
+    rect rgb(255, 250, 245)
+        Note over L,V: Proposal Flooding & DOS Protection
         
-        alt Equivocation Detection
-            C->>C: Detect double voting
-            C->>+S: Log byzantine evidence
-            S-->>-C: Evidence stored
-            C->>+N: Broadcast EvidenceMsg (signed)
-            N-->>-V: Propagate to network
-        else Invalid QC Received
-            C->>+CR: Verify QC integrity
-            CR-->>-C: QC verification failed
-            C->>C: Reject invalid QC
-            Note over C: Potential byzantine leader
-        else Conflicting Proposals
-            C->>C: Multiple proposals for same view
-            C->>+S: Log equivocation evidence
-            S-->>-C: Evidence logged
-            Note over C: Leader byzantine behavior
+        %% Initialize Rate Limiters
+        C->>C: Initialize per-leader rate limiters
+        Note over C: Limits per leader per view:<br/>- Max 1 valid proposal<br/>- Max 3 total messages (including invalid)<br/>- Max 70MB message size (65MB expected + 5MB buffer)<br/>- Penalty backoff for violations
+        
+        %% Size Limit Motivation
+        Note over C: Expected legitimate sizes:<br/>- Block: up to 50MB<br/>- QC: ~15MB (≥342 sigs @ 29KB)<br/>- Total proposal: up to 65MB<br/>70MB limit allows legitimate max + overhead<br/>while preventing memory exhaustion attacks
+        
+        %% Proposal Reception with Protection
+        alt Leader Proposal Received
+            V->>N: Receive ProposalMsg from leader
+            
+            %% Size Check with Clear Limits
+            N->>N: Check message size
+            alt Message > 70MB limit
+                N->>N: Reject oversized message
+                N->>LOG: Log OVERSIZED_PROPOSAL
+                Note over LOG: {leader: X, size: S, limit: 70MB,<br/>expected_max: 65MB, view: V}<br/>Rejected as potential DOS attack
+                N->>C: Alert consensus engine
+                C->>C: Mark leader as potentially malicious
+            else Size acceptable (≤70MB)
+                N-->>C: Forward proposal
+                
+                %% Component Size Validation
+                C->>C: Parse and validate components
+                alt Block portion > 50MB
+                    C->>LOG: Log OVERSIZED_BLOCK_COMPONENT
+                    C->>C: Reject - block exceeds limit
+                else QC portion > 16MB
+                    C->>LOG: Log OVERSIZED_QC_COMPONENT
+                    Note over LOG: Expected ~15MB, allowing 1MB buffer
+                    C->>C: Reject - QC unreasonably large
+                else Components valid
+                    %% Rate Limiting Check
+                    C->>C: Check leader's proposal count for this view
+                    alt First proposal from leader this view
+                        C->>C: Process normally
+                        C->>C: Record: proposals[leader][view] = 1
+                        
+                        %% Additional Validation
+                        C->>C: Validate transaction count ≤ MAX_TXS
+                        C->>C: Validate timestamp reasonable
+                        
+                        alt All validations pass
+                            C->>C: Continue with normal proposal processing
+                        else Validation failed
+                            C->>LOG: Log INVALID_PROPOSAL_STRUCTURE
+                            C->>C: Increment leader's invalid count
+                            alt Invalid count > 2
+                                C->>C: Mark leader Byzantine for this view
+                                C->>C: Trigger early view change
+                            end
+                        end
+                        
+                    else Duplicate valid proposal (same content)
+                        C->>C: Ignore duplicate, already processing
+                        
+                    else Different proposal (equivocation)
+                        C->>C: Leader attempting multiple different proposals
+                        C->>LOG: Log PROPOSAL_FLOOD_EQUIVOCATION
+                        Note over LOG: {leader: X, view: V, type: "multiple_proposals",<br/>proposal1_hash: H1, proposal2_hash: H2}
+                        C->>S: Store both proposals as evidence
+                        S-->>C: Evidence stored
+                        C->>C: Mark leader Byzantine
+                        C->>C: Trigger immediate view change
+                        C->>N: Broadcast equivocation evidence
+                        N-->>V: Alert all validators
+                        
+                    else Too many messages from leader
+                        C->>C: Check total message count
+                        alt Message count > 3
+                            C->>LOG: Log PROPOSAL_FLOOD_DOS
+                            Note over LOG: {leader: X, view: V, message_count: N,<br/>type: "dos_attempt"}
+                            C->>C: Block all messages from leader this view
+                            C->>C: Trigger timeout for view change
+                        end
+                    end
+                end
+            end
         end
+        
+        %% Bandwidth Tracking
+        loop Every second
+            C->>C: Track bandwidth per peer
+            alt Peer exceeding 2Gbps sustained
+                C->>N: Throttle connection to peer
+                C->>LOG: Log BANDWIDTH_THROTTLE
+                Note over LOG: {peer: X, bandwidth: B, action: "throttled"}
+            else Peer exceeding 5Gbps burst
+                C->>N: Temporarily disconnect peer
+                C->>LOG: Log BANDWIDTH_VIOLATION
+                Note over LOG: {peer: X, bandwidth: B, action: "disconnected"}
+                C->>C: Mark peer as potentially malicious
+            end
+        end
+        
+        %% Memory Protection
+        C->>C: Monitor proposal buffer memory
+        alt Buffer > 500MB for single leader
+            C->>C: Drop oldest proposals from leader
+            C->>LOG: Log MEMORY_PRESSURE_DROP
+            C->>C: Mark leader as resource-intensive
+        end
+        
+        %% Cumulative DOS Score
+        C->>C: Calculate DOS score for each validator
+        Note over C: DOS Score factors:<br/>- Proposal floods: +10 per incident<br/>- Oversized messages: +5 per incident<br/>- Bandwidth violations: +3 per incident<br/>- Invalid proposals: +1 per incident<br/>- Score decays by 1 per successful view
+        
+        alt DOS Score > 50
+            C->>C: Mark validator as DOS attacker
+            C->>N: Block all messages from validator for 100 views
+            C->>LOG: Log DOS_ATTACKER_BLOCKED
+            Note over LOG: {validator: X, dos_score: S, block_duration: 100_views}
+        end
+    end
+    
+    %% Network-level Protection
+    rect rgb(250, 255, 250)
+        Note over N: Network Layer DOS Protection
+        
+        N->>N: Connection-level rate limiting
+        Note over N: - Max 1000 connections per peer<br/>- Max 100 new connections/second<br/>- SYN flood protection<br/>- Message fragmentation limits
+        
+        N->>N: Priority queuing
+        Note over N: Priority order:<br/>1. QCs and votes (small, critical)<br/>2. Proposals from current leader<br/>3. Evidence messages<br/>4. Sync requests<br/>5. Other messages
+        
+        alt Network under stress
+            N->>N: Enable defensive mode
+            N->>N: Drop non-critical messages
+            N->>N: Reduce sync response sizes
+            N->>N: Increase view timeout to reduce load
+        end
+    end
+    
+    %% Garbage Collection Protocol
+    rect rgb(245, 250, 255)
+        Note over S: Garbage Collection & Memory Management
+        
+        %% Periodic GC Trigger
+        loop Every GC_INTERVAL (100 views or 1 hour)
+            C->>C: Check memory usage and state size
+            
+            alt Memory threshold exceeded (>80% used)
+                C->>C: Trigger immediate GC
+            else Scheduled GC
+                C->>C: Wait for stable view (no pending votes)
+            end
+            
+            %% GC Process
+            C->>S: Identify prunable state
+            S->>S: Mark blocks below committed_height - KEEP_BLOCKS (default: 1000)
+            S->>S: Mark QCs for pruned blocks
+            S->>S: Mark timeout messages older than current_view - KEEP_VIEWS (default: 100)
+            S->>S: Mark NewView messages from old views
+            
+            %% Safety Check
+            S->>S: Ensure keeping at least:
+            S->>S: - Last 3 committed blocks and their QCs
+            S->>S: - Current lockedQC and its chain
+            S->>S: - highestQC and its chain
+            S->>S: - All blocks referenced by active votes
+            
+            %% Atomic Cleanup
+            S->>S: BEGIN TRANSACTION
+            S->>S: Move prunable items to archive (if configured)
+            S->>S: Delete prunable items from active storage
+            S->>S: Update pruned_height marker
+            S->>S: Recalculate and store new state checksum
+            S->>S: COMMIT with fsync
+            S-->>C: GC completed, freed X MB
+            
+            %% Memory Compaction
+            C->>C: Compact in-memory vote accumulators
+            C->>C: Clear expired message buffers
+            C->>C: Reset byzantine evidence older than EVIDENCE_EXPIRY (default: 1 day)
+        end
+        
+        %% Emergency GC (out of memory)
+        alt Critical memory pressure (>95% used)
+            C->>C: Enter emergency GC mode
+            C->>C: Stop accepting new proposals
+            C->>S: Force prune to last committed block
+            C->>C: Drop all pending votes and timeouts
+            C->>C: Clear all caches
+            C->>C: Request state sync if necessary
+        end
+        
+        Note over S: Archive retention policy (optional):
+        Note over S: - Compressed archives: 30 days
+        Note over S: - Byzantine evidence: permanent
+        Note over S: - Performance metrics: 7 days
     end

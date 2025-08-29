@@ -1,0 +1,260 @@
+# Event Type Registry - Synchronized with ADR-007
+# Maps diagram EMITS annotations to ADR event taxonomy
+
+event_type_registry:
+  version: "1.0"
+  adr_reference: "ADR-007-event-based-consensus-testing.md"
+  
+  # Core Event Categories from ADR-007
+  proposal_events:
+    proposal_created:
+      adr_constant: "interfaces.EventProposalCreated"
+      go_type: "interfaces.EventType"
+      description: "Leader creates new block proposal"
+      emitted_by: ["leader"]
+      diagram_annotation: "proposal_created"
+      
+    proposal_received:
+      adr_constant: "interfaces.EventProposalReceived"  
+      go_type: "interfaces.EventType"
+      description: "Validator receives proposal message"
+      emitted_by: ["validator"]
+      diagram_annotation: "proposal_received"
+      
+    proposal_validated:
+      adr_constant: "interfaces.EventProposalValidated"
+      go_type: "interfaces.EventType" 
+      description: "Proposal passes all validation checks"
+      emitted_by: ["validator"]
+      diagram_annotation: "proposal_validated"
+      aliases: ["view_validated", "leader_verified", "payload_validated", "hash_validated", "parent_found", "justify_qc_valid", "safenode_passed", "vote_allowed", "proposal_signature_valid"]
+      
+    proposal_rejected:
+      adr_constant: "interfaces.EventProposalRejected"
+      go_type: "interfaces.EventType"
+      description: "Proposal rejected for any reason"
+      emitted_by: ["validator"]
+      diagram_annotation: "proposal_rejected"
+      rejection_reasons: ["view_invalid", "parent_invalid", "justify_qc_invalid", "safenode_violated", "duplicate_vote_prevented", "signature_invalid"]
+
+  vote_events:
+    vote_created:
+      adr_constant: "interfaces.EventVoteCreated"
+      go_type: "interfaces.EventType"
+      description: "Vote signature created after validation"
+      emitted_by: ["validator"]
+      diagram_annotation: "vote_created"
+      
+    vote_sent:
+      adr_constant: "interfaces.EventVoteSent"
+      go_type: "interfaces.EventType"
+      description: "Vote transmitted to leader"
+      emitted_by: ["validator"]
+      diagram_annotation: "vote_sent"
+      
+    vote_received:
+      adr_constant: "interfaces.EventVoteReceived"
+      go_type: "interfaces.EventType"
+      description: "Leader receives vote from validator"
+      emitted_by: ["leader"]
+      diagram_annotation: "vote_received"
+      aliases: ["vote_delivered"]
+      
+    vote_validated:
+      adr_constant: "interfaces.EventVoteValidated"
+      go_type: "interfaces.EventType"
+      description: "Vote signature and content validated by leader"
+      emitted_by: ["leader"]
+      diagram_annotation: "vote_validated"
+
+  qc_events:
+    qc_formed:
+      adr_constant: "interfaces.EventQCFormed"
+      go_type: "interfaces.EventType"
+      description: "Quorum certificate formed from ≥2f+1 votes"
+      emitted_by: ["leader"]
+      diagram_annotation: "qc_formed"
+      
+    qc_received:
+      adr_constant: "interfaces.EventQCReceived"
+      go_type: "interfaces.EventType"
+      description: "QC received by validator"
+      emitted_by: ["validator"]
+      diagram_annotation: "qc_received"
+      
+    qc_validated:
+      adr_constant: "interfaces.EventQCValidated"
+      go_type: "interfaces.EventType"
+      description: "QC signatures and threshold validated"
+      emitted_by: ["validator"]
+      diagram_annotation: "qc_validated"
+
+  view_events:
+    view_timeout:
+      adr_constant: "interfaces.EventViewTimeout"
+      go_type: "interfaces.EventType"
+      description: "Phase timeout detected"
+      emitted_by: ["validator", "leader"]
+      diagram_annotation: "view_timeout"
+      aliases: ["timeout_detected"]
+      
+    view_change:
+      adr_constant: "interfaces.EventViewChange"
+      go_type: "interfaces.EventType"
+      description: "View change initiated"
+      emitted_by: ["validator", "leader"]
+      diagram_annotation: "view_change"
+      
+    new_view_started:
+      adr_constant: "interfaces.EventNewViewStarted"
+      go_type: "interfaces.EventType"
+      description: "New view successfully started"
+      emitted_by: ["validator", "leader"]
+      diagram_annotation: "new_view_started"
+      aliases: ["timeout_sent"]
+
+  byzantine_events:
+    byzantine_detected:
+      adr_constant: "interfaces.EventByzantineDetected"
+      go_type: "interfaces.EventType"
+      description: "Byzantine behavior detected"
+      emitted_by: ["honest_validator", "honest_leader"]
+      diagram_annotation: "byzantine_detected"
+      aliases: ["byzantine_behavior_suspected"]
+      
+    equivocation_found:
+      adr_constant: "interfaces.EventEquivocationFound"
+      go_type: "interfaces.EventType"
+      description: "Equivocation (double voting/proposing) detected"
+      emitted_by: ["honest_validator", "honest_leader"]
+      diagram_annotation: "equivocation_detected"
+      aliases: ["conflicting_proposals_detected"]
+      
+    evidence_stored:
+      adr_constant: "interfaces.EventEvidenceStored"
+      go_type: "interfaces.EventType"
+      description: "Byzantine evidence permanently stored"
+      emitted_by: ["honest_validator", "honest_leader"]
+      diagram_annotation: "evidence_stored"
+      
+    evidence_collected:
+      adr_constant: "interfaces.EventEvidenceCollected"
+      go_type: "interfaces.EventType"
+      description: "Byzantine evidence collected for storage"
+      emitted_by: ["honest_validator", "honest_leader"]
+      diagram_annotation: "evidence_collected"
+
+  block_events:
+    block_added:
+      adr_constant: "interfaces.EventBlockAdded"
+      go_type: "interfaces.EventType"
+      description: "Block added to block tree"
+      emitted_by: ["validator", "leader"]
+      diagram_annotation: "block_added"
+      
+    block_validated:
+      adr_constant: "interfaces.EventBlockValidated"
+      go_type: "interfaces.EventType"
+      description: "Block content and structure validated"
+      emitted_by: ["validator"]
+      diagram_annotation: "block_validated"
+      
+    block_committed:
+      adr_constant: "interfaces.EventBlockCommitted"
+      go_type: "interfaces.EventType"
+      description: "Block finalized and committed"
+      emitted_by: ["validator", "leader"]
+      diagram_annotation: "block_committed"
+
+  # Additional events for comprehensive coverage
+  exclusion_events:
+    validator_excluded:
+      adr_constant: "interfaces.EventValidatorExcluded"
+      go_type: "interfaces.EventType"
+      description: "Byzantine validator excluded from consensus"
+      emitted_by: ["honest_validator", "honest_leader"]
+      diagram_annotation: "validator_excluded"
+      
+    leader_marked_byzantine:
+      adr_constant: "interfaces.EventLeaderMarkedByzantine"
+      go_type: "interfaces.EventType"
+      description: "Leader marked as Byzantine"
+      emitted_by: ["honest_validator"]
+      diagram_annotation: "leader_marked_byzantine"
+
+  broadcast_events:
+    evidence_broadcasted:
+      adr_constant: "interfaces.EventEvidenceBroadcasted"
+      go_type: "interfaces.EventType"
+      description: "Evidence broadcast to network"
+      emitted_by: ["honest_validator", "honest_leader"]
+      diagram_annotation: "evidence_broadcasted"
+      
+    byzantine_logged:
+      adr_constant: "interfaces.EventByzantineLogged"
+      go_type: "interfaces.EventType"
+      description: "Byzantine behavior logged"
+      emitted_by: ["honest_validator", "honest_leader"]
+      diagram_annotation: "byzantine_logged"
+
+# Validation mapping for diagram events
+diagram_to_adr_mapping:
+  # Diagram annotation -> ADR event type
+  "proposal_received": "interfaces.EventProposalReceived"
+  "view_validated": "interfaces.EventProposalValidated"
+  "leader_verified": "interfaces.EventProposalValidated"
+  "payload_validated": "interfaces.EventProposalValidated"
+  "hash_validated": "interfaces.EventProposalValidated"
+  "parent_found": "interfaces.EventProposalValidated"
+  "justify_qc_valid": "interfaces.EventProposalValidated"
+  "safenode_passed": "interfaces.EventProposalValidated"
+  "vote_allowed": "interfaces.EventProposalValidated"
+  "proposal_signature_valid": "interfaces.EventProposalValidated"
+  "vote_created": "interfaces.EventVoteCreated"
+  "vote_sent": "interfaces.EventVoteSent"
+  "vote_delivered": "interfaces.EventVoteReceived"
+  "block_added": "interfaces.EventBlockAdded"
+  "proposal_rejected": "interfaces.EventProposalRejected"
+  "view_invalid": "interfaces.EventProposalRejected"
+  "parent_invalid": "interfaces.EventProposalRejected"
+  "justify_qc_invalid": "interfaces.EventProposalRejected"
+  "safenode_violated": "interfaces.EventProposalRejected"
+  "duplicate_vote_prevented": "interfaces.EventProposalRejected"
+  "signature_invalid": "interfaces.EventProposalRejected"
+  "timeout_sent": "interfaces.EventNewViewStarted"
+  "equivocation_detected": "interfaces.EventEquivocationFound"
+  "evidence_collected": "interfaces.EventEvidenceCollected"
+  "evidence_stored": "interfaces.EventEvidenceStored"
+  "validator_excluded": "interfaces.EventValidatorExcluded"
+  "byzantine_behavior_suspected": "interfaces.EventByzantineDetected"
+  "conflicting_proposals_detected": "interfaces.EventEquivocationFound"
+  "byzantine_logged": "interfaces.EventByzantineLogged"
+  "evidence_broadcasted": "interfaces.EventEvidenceBroadcasted"
+  "leader_marked_byzantine": "interfaces.EventLeaderMarkedByzantine"
+
+# Event categories for validation rules
+event_categories:
+  happy_path_events:
+    - "proposal_received"
+    - "proposal_validated"  
+    - "vote_created"
+    - "vote_sent"
+    - "vote_received"
+    - "block_added"
+    
+  rejection_events:
+    - "proposal_rejected"
+    - "view_invalid"
+    - "parent_invalid"
+    - "justify_qc_invalid"
+    - "safenode_violated"
+    - "duplicate_vote_prevented"
+    - "signature_invalid"
+    
+  byzantine_detection_events:
+    - "equivocation_detected"
+    - "evidence_collected"
+    - "evidence_stored"
+    - "validator_excluded"
+    - "byzantine_logged"
+    - "evidence_broadcasted"
