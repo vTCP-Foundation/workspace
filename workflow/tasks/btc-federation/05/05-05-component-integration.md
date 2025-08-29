@@ -125,7 +125,7 @@ type ConsensusConfig struct {
 - ✅ `IsTimeoutEnabled()` - Timeout feature toggle
 
 ## **Message Processing Integration**
-**Files**: `cmd/full-hotstuff-demo/main.go`, `cmd/timeout-hotstuff-demo/main.go`
+**Files**: `cmd/demo/hotstuff/full-hotstuff-demo/main.go`, `cmd/demo/hotstuff/timeout-hotstuff-demo/main.go`
 
 ### **Complete Message Routing**
 - ✅ **ProposalMsg** → `coordinator.ProcessProposal()`
@@ -136,13 +136,13 @@ type ConsensusConfig struct {
 
 ## **Comprehensive Demos Implemented**
 
-### **1. Full HotStuff Demo** (`cmd/full-hotstuff-demo/`)
+### **1. Full HotStuff Demo** (`cmd/demo/hotstuff/full-hotstuff-demo/`)
 - ✅ 12-block consensus with progress bar
 - ✅ State consistency validation across all nodes
 - ✅ Complete message routing and phase coordination
 - ✅ Bulletproof idempotent state management
 
-### **2. Timeout & View Change Demo** (`cmd/timeout-hotstuff-demo/`)
+### **2. Timeout & View Change Demo** (`cmd/demo/hotstuff/timeout-hotstuff-demo/`)
 - ✅ Leader failure simulation via network partitioning
 - ✅ Network partition and recovery scenarios  
 - ✅ Timeout detection and view change triggering
