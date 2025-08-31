@@ -323,11 +323,12 @@ This iteration establishes the foundation for:
 - No persistent storage requirements for this iteration
 
 ##### ExchangeRatesManager: external rates storage and TTL
-- `mExternalExchangeRates`: `map<pair<SerializedEquivalent, SerializedEquivalent>, vector<ExchangeRate>>`
+- `mExternalExchangeRates`: `map<pair<SerializedEquivalent, SerializedEquivalent>, vector<pair<ContractorID, ExchangeRate>>>`
 - TTL cleanup timer behavior:
   - Computes the nearest `expiresAt` across all stored external rates and sleeps until that time.
   - Upon wake-up, removes expired entries from vectors and erases empty vectors from the map.
   - On insertion of a new external `ExchangeRate`, recompute the nearest expiration and reschedule the timer if necessary.
+  - Each external rate is stored together with the `ContractorID` of the sender (obtained via `EquivalentsSubsystemsRouter::getOrCreateParticipantID`).
   - Behavior mirrors the internal `mExchangeRates` TTL maintenance.
 
 #### Data Migration

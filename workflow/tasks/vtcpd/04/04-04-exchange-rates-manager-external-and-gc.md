@@ -4,12 +4,12 @@
 - [PRD](../../../prd/vtcpd/04-exchange-flow-calculation.md)
 
 # Description
-Implement storage of external exchange rates in `ExchangeRatesManager` (`mExternalExchangeRates`) and a TTL cleanup mechanism with nearest-event rescheduling. Provide unit coverage.
+Implement storage of external exchange rates in `ExchangeRatesManager` (`mExternalExchangeRates`) and a TTL cleanup mechanism with nearest-event rescheduling. Store alongside the `ContractorID` of the sender. Provide unit coverage.
 
 # Requirements and DOD
-- Add `mExternalExchangeRates`: `map<pair<SerializedEquivalent, SerializedEquivalent>, vector<ExchangeRate>>`.
+- Add `mExternalExchangeRates`: `map<pair<SerializedEquivalent, SerializedEquivalent>, vector<pair<ContractorID, ExchangeRate>>>`.
 - Add cleanup timer: finds nearest `expiresAt`, sleeps until due, removes expired entries, erases empty vectors, and reschedules on insertion.
-- Public API for inserting/updating external rates.
+- Public API for inserting/updating external rates with signature `addOrUpdateExternal(ContractorID contractorID, const ExchangeRate &rate)`.
 - Unit tests for insert/update/cleanup, including edge cases.
 - Build and run in `build-tests`.
 
