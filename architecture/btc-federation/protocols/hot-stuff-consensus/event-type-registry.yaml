@@ -2,10 +2,10 @@
 # Maps diagram EMITS annotations to ADR event taxonomy
 
 event_type_registry:
-  version: "1.0"
+  version: "1.1"
   adr_reference: "ADR-007-event-based-consensus-testing.md"
   
-  # Core Event Categories from ADR-007
+  # Core Event Categories from ADR-007 (legacy aliases retained)
   proposal_events:
     proposal_created:
       adr_constant: "interfaces.EventProposalCreated"
@@ -197,7 +197,298 @@ event_type_registry:
       emitted_by: ["honest_validator", "honest_leader"]
       diagram_annotation: "byzantine_logged"
 
-# Validation mapping for diagram events
+  # Canonical Events (v1.1) — Phase-Disambiguated and Role-Scoped
+  canonical_events:
+    proposal:
+      proposal_created:
+        adr_constant: "interfaces.EventProposalCreated"
+        description: "Leader creates new block proposal"
+        emitted_by: ["leader"]
+        diagram_annotation: "proposal_created"
+      proposal_broadcasted:
+        adr_constant: "interfaces.EventProposalBroadcasted"
+        description: "Leader broadcasts proposal to validators"
+        emitted_by: ["leader"]
+        diagram_annotation: "proposal_broadcasted"
+        aliases: ["proposal_sent"]
+      proposal_received:
+        adr_constant: "interfaces.EventProposalReceived"
+        description: "Validator receives proposal message"
+        emitted_by: ["validator"]
+        diagram_annotation: "proposal_received"
+      proposal_validated:
+        adr_constant: "interfaces.EventProposalValidated"
+        description: "Proposal passed structure/parent/justify/signature/safenode"
+        emitted_by: ["validator"]
+        diagram_annotation: "proposal_validated"
+      proposal_rejected:
+        adr_constant: "interfaces.EventProposalRejected"
+        description: "Proposal rejected with reason"
+        emitted_by: ["validator"]
+        diagram_annotation: "proposal_rejected"
+
+    prepare_phase:
+      prepare_vote_created:
+        adr_constant: "interfaces.EventPrepareVoteCreated"
+        description: "Validator created prepare vote"
+        emitted_by: ["validator"]
+        diagram_annotation: "prepare_vote_created"
+        aliases: ["vote_created"]
+      prepare_vote_sent:
+        adr_constant: "interfaces.EventPrepareVoteSent"
+        description: "Validator sent prepare vote to leader"
+        emitted_by: ["validator"]
+        diagram_annotation: "prepare_vote_sent"
+        aliases: ["vote_sent"]
+      prepare_vote_received:
+        adr_constant: "interfaces.EventPrepareVoteReceived"
+        description: "Leader received prepare vote"
+        emitted_by: ["leader"]
+        diagram_annotation: "prepare_vote_received"
+        aliases: ["vote_received"]
+      prepare_vote_validated:
+        adr_constant: "interfaces.EventPrepareVoteValidated"
+        description: "Leader validated prepare vote signature and content"
+        emitted_by: ["leader"]
+        diagram_annotation: "prepare_vote_validated"
+        aliases: ["vote_validated"]
+      prepare_qc_formed:
+        adr_constant: "interfaces.EventPrepareQCFormed"
+        description: "Leader formed Prepare QC (≥2f+1)"
+        emitted_by: ["leader"]
+        diagram_annotation: "prepare_qc_formed"
+        aliases: ["qc_formed"]
+      prepare_qc_broadcasted:
+        adr_constant: "interfaces.EventPrepareQCBroadcasted"
+        description: "Leader broadcasted Prepare QC"
+        emitted_by: ["leader"]
+        diagram_annotation: "prepare_qc_broadcasted"
+      prepare_qc_received:
+        adr_constant: "interfaces.EventPrepareQCReceived"
+        description: "Validator received Prepare QC"
+        emitted_by: ["validator"]
+        diagram_annotation: "prepare_qc_received"
+        aliases: ["qc_received"]
+      prepare_qc_validated:
+        adr_constant: "interfaces.EventPrepareQCValidated"
+        description: "Validator validated Prepare QC signatures and threshold"
+        emitted_by: ["validator"]
+        diagram_annotation: "prepare_qc_validated"
+        aliases: ["qc_validated"]
+
+    precommit_phase:
+      precommit_vote_created:
+        adr_constant: "interfaces.EventPreCommitVoteCreated"
+        description: "Validator created pre-commit vote"
+        emitted_by: ["validator"]
+        diagram_annotation: "precommit_vote_created"
+      precommit_vote_sent:
+        adr_constant: "interfaces.EventPreCommitVoteSent"
+        description: "Validator sent pre-commit vote to leader"
+        emitted_by: ["validator"]
+        diagram_annotation: "precommit_vote_sent"
+      precommit_vote_received:
+        adr_constant: "interfaces.EventPreCommitVoteReceived"
+        description: "Leader received pre-commit vote"
+        emitted_by: ["leader"]
+        diagram_annotation: "precommit_vote_received"
+      precommit_vote_validated:
+        adr_constant: "interfaces.EventPreCommitVoteValidated"
+        description: "Leader validated pre-commit vote"
+        emitted_by: ["leader"]
+        diagram_annotation: "precommit_vote_validated"
+      precommit_qc_formed:
+        adr_constant: "interfaces.EventPreCommitQCFormed"
+        description: "Leader formed Pre-Commit QC"
+        emitted_by: ["leader"]
+        diagram_annotation: "precommit_qc_formed"
+      precommit_qc_broadcasted:
+        adr_constant: "interfaces.EventPreCommitQCBroadcasted"
+        description: "Leader broadcasted Pre-Commit QC"
+        emitted_by: ["leader"]
+        diagram_annotation: "precommit_qc_broadcasted"
+      precommit_qc_received:
+        adr_constant: "interfaces.EventPreCommitQCReceived"
+        description: "Validator received Pre-Commit QC"
+        emitted_by: ["validator"]
+        diagram_annotation: "precommit_qc_received"
+      precommit_qc_validated:
+        adr_constant: "interfaces.EventPreCommitQCValidated"
+        description: "Validator validated Pre-Commit QC"
+        emitted_by: ["validator"]
+        diagram_annotation: "precommit_qc_validated"
+
+    commit_phase:
+      commit_vote_created:
+        adr_constant: "interfaces.EventCommitVoteCreated"
+        description: "Validator created commit vote"
+        emitted_by: ["validator"]
+        diagram_annotation: "commit_vote_created"
+      commit_vote_sent:
+        adr_constant: "interfaces.EventCommitVoteSent"
+        description: "Validator sent commit vote to leader"
+        emitted_by: ["validator"]
+        diagram_annotation: "commit_vote_sent"
+      commit_vote_received:
+        adr_constant: "interfaces.EventCommitVoteReceived"
+        description: "Leader received commit vote"
+        emitted_by: ["leader"]
+        diagram_annotation: "commit_vote_received"
+      commit_vote_validated:
+        adr_constant: "interfaces.EventCommitVoteValidated"
+        description: "Leader validated commit vote"
+        emitted_by: ["leader"]
+        diagram_annotation: "commit_vote_validated"
+      commit_qc_formed:
+        adr_constant: "interfaces.EventCommitQCFormed"
+        description: "Leader formed Commit QC"
+        emitted_by: ["leader"]
+        diagram_annotation: "commit_qc_formed"
+      commit_qc_broadcasted:
+        adr_constant: "interfaces.EventCommitQCBroadcasted"
+        description: "Leader broadcasted Commit QC"
+        emitted_by: ["leader"]
+        diagram_annotation: "commit_qc_broadcasted"
+      commit_qc_received:
+        adr_constant: "interfaces.EventCommitQCReceived"
+        description: "Validator received Commit QC"
+        emitted_by: ["validator"]
+        diagram_annotation: "commit_qc_received"
+      commit_qc_validated:
+        adr_constant: "interfaces.EventCommitQCValidated"
+        description: "Validator validated Commit QC"
+        emitted_by: ["validator"]
+        diagram_annotation: "commit_qc_validated"
+
+    block_and_safety:
+      block_added:
+        adr_constant: "interfaces.EventBlockAdded"
+        description: "Block added to block tree"
+        emitted_by: ["leader", "validator"]
+        diagram_annotation: "block_added"
+      block_committed:
+        adr_constant: "interfaces.EventBlockCommitted"
+        description: "Block finalized and committed"
+        emitted_by: ["leader", "validator"]
+        diagram_annotation: "block_committed"
+      locked_qc_updated:
+        adr_constant: "interfaces.EventLockedQCUpdated"
+        description: "Locked QC updated due to Pre-Commit QC"
+        emitted_by: ["leader", "validator"]
+        diagram_annotation: "locked_qc_updated"
+      highest_qc_updated:
+        adr_constant: "interfaces.EventHighestQCUpdated"
+        description: "Highest QC updated from NewView messages"
+        emitted_by: ["leader"]
+        diagram_annotation: "highest_qc_updated"
+      safenode_check_passed:
+        adr_constant: "interfaces.EventSafeNodePassed"
+        description: "SafeNode rule passed"
+        emitted_by: ["validator"]
+        diagram_annotation: "safenode_check_passed"
+      safenode_check_failed:
+        adr_constant: "interfaces.EventSafeNodeFailed"
+        description: "SafeNode rule failed"
+        emitted_by: ["validator"]
+        diagram_annotation: "safenode_check_failed"
+
+    view_timeout:
+      view_timer_started:
+        adr_constant: "interfaces.EventViewTimerStarted"
+        description: "View timer started"
+        emitted_by: ["leader", "validator"]
+        diagram_annotation: "view_timer_started"
+      view_timeout_detected:
+        adr_constant: "interfaces.EventViewTimeout"
+        description: "Phase timeout detected"
+        emitted_by: ["leader", "validator"]
+        diagram_annotation: "view_timeout"
+      timeout_message_sent:
+        adr_constant: "interfaces.EventTimeoutMessageSent"
+        description: "Timeout message sent"
+        emitted_by: ["leader", "validator"]
+        diagram_annotation: "timeout_message_sent"
+      timeout_message_received:
+        adr_constant: "interfaces.EventTimeoutMessageReceived"
+        description: "Timeout message received"
+        emitted_by: ["leader", "validator"]
+        diagram_annotation: "timeout_message_received"
+      timeout_message_validated:
+        adr_constant: "interfaces.EventTimeoutMessageValidated"
+        description: "Timeout message validated"
+        emitted_by: ["leader", "validator"]
+        diagram_annotation: "timeout_message_validated"
+      view_change_started:
+        adr_constant: "interfaces.EventViewChange"
+        description: "View change initiated"
+        emitted_by: ["leader", "validator"]
+        diagram_annotation: "view_change"
+      new_view_message_sent:
+        adr_constant: "interfaces.EventNewViewMessageSent"
+        description: "NewView message broadcasted by new leader"
+        emitted_by: ["leader"]
+        diagram_annotation: "new_view_message_sent"
+      new_view_message_received:
+        adr_constant: "interfaces.EventNewViewMessageReceived"
+        description: "NewView message received"
+        emitted_by: ["leader", "validator"]
+        diagram_annotation: "new_view_message_received"
+      new_view_message_validated:
+        adr_constant: "interfaces.EventNewViewMessageValidated"
+        description: "NewView message validated"
+        emitted_by: ["leader", "validator"]
+        diagram_annotation: "new_view_message_validated"
+      new_view_started:
+        adr_constant: "interfaces.EventNewViewStarted"
+        description: "New view started"
+        emitted_by: ["leader", "validator"]
+        diagram_annotation: "new_view_started"
+      leader_elected:
+        adr_constant: "interfaces.EventLeaderElected"
+        description: "Leader elected for current view"
+        emitted_by: ["leader", "validator"]
+        diagram_annotation: "leader_elected"
+
+    storage_and_sync:
+      storage_tx_begin:
+        adr_constant: "interfaces.EventStorageTxBegin"
+        description: "Begin storage transaction for QC persistence"
+        emitted_by: ["leader", "validator"]
+        diagram_annotation: "storage_tx_begin"
+      storage_tx_commit:
+        adr_constant: "interfaces.EventStorageTxCommit"
+        description: "Commit storage transaction"
+        emitted_by: ["leader", "validator"]
+        diagram_annotation: "storage_tx_commit"
+      storage_tx_rollback:
+        adr_constant: "interfaces.EventStorageTxRollback"
+        description: "Rollback storage transaction"
+        emitted_by: ["leader", "validator"]
+        diagram_annotation: "storage_tx_rollback"
+      state_sync_requested:
+        adr_constant: "interfaces.EventStateSyncRequested"
+        description: "State synchronization requested"
+        emitted_by: ["leader", "validator"]
+        diagram_annotation: "state_sync_requested"
+      state_sync_completed:
+        adr_constant: "interfaces.EventStateSyncCompleted"
+        description: "State synchronization completed"
+        emitted_by: ["leader", "validator"]
+        diagram_annotation: "state_sync_completed"
+
+    network_partition:
+      partition_mode_entered:
+        adr_constant: "interfaces.EventPartitionModeEntered"
+        description: "Node enters partition mode due to insufficient connectivity"
+        emitted_by: ["leader", "validator"]
+        diagram_annotation: "partition_mode_entered"
+      partition_mode_exited:
+        adr_constant: "interfaces.EventPartitionModeExited"
+        description: "Node exits partition mode after connectivity restored"
+        emitted_by: ["leader", "validator"]
+        diagram_annotation: "partition_mode_exited"
+
+# Validation mapping for diagram events (legacy + canonical)
 diagram_to_adr_mapping:
   # Diagram annotation -> ADR event type
   "proposal_received": "interfaces.EventProposalReceived"
@@ -231,6 +522,9 @@ diagram_to_adr_mapping:
   "byzantine_logged": "interfaces.EventByzantineLogged"
   "evidence_broadcasted": "interfaces.EventEvidenceBroadcasted"
   "leader_marked_byzantine": "interfaces.EventLeaderMarkedByzantine"
+  "partition_mode_entered": "interfaces.EventPartitionModeEntered"
+  "partition_mode_exited": "interfaces.EventPartitionModeExited"
+  "highest_qc_updated": "interfaces.EventHighestQCUpdated"
 
 # Event categories for validation rules
 event_categories:

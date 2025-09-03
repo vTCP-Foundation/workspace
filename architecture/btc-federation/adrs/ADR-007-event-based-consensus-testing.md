@@ -410,19 +410,79 @@ Since all nodes run in shared test runtime with mock infrastructure:
 
 ## Implementation Architecture
 
-### Core Events Taxonomy
+### Canonical Events Taxonomy (v1.1)
 
-**Proposal Events**: `proposal_created`, `proposal_received`, `proposal_validated`, `proposal_rejected`
+To eliminate ambiguity and enable strict rule validation, we introduce a phase-disambiguated, role-scoped event set. Existing generic events remain available as aliases for a transition period. The registry is updated to version 1.1.
 
-**Vote Events**: `vote_created`, `vote_sent`, `vote_received`, `vote_validated`
+Key principles:
+- Phase prefixing: `prepare_*`, `precommit_*`, `commit_*` for phase-specific votes and QCs
+- Role scoping: leader-only vs validator-only events
+- Required payloads: standardized keys across events for deterministic validation
 
-**QC Events**: `qc_formed`, `qc_received`, `qc_validated`
+Proposal:
+- `proposal_created` (leader): block proposal created
+- `proposal_broadcasted` (leader): proposal broadcast
+- `proposal_received` (validator): proposal delivered to validator
+- `proposal_validated` (validator): structure/parent/justify/signature/safenode checks passed
+- `proposal_rejected` (validator): validation failed, with reason
 
-**View Events**: `view_timeout`, `view_change`, `new_view_started`
+Prepare phase:
+- `prepare_vote_created|sent` (validator)
+- `prepare_vote_received|validated` (leader)
+- `prepare_qc_formed|broadcasted` (leader)
+- `prepare_qc_received|validated` (validator)
 
-**Byzantine Events**: `byzantine_detected`, `equivocation_found`, `evidence_stored`
+Pre-commit phase:
+- `precommit_vote_created|sent` (validator)
+- `precommit_vote_received|validated` (leader)
+- `precommit_qc_formed|broadcasted` (leader)
+- `precommit_qc_received|validated` (validator)
 
-**Block Events**: `block_committed`, `block_added`, `block_validated`
+Commit phase:
+- `commit_vote_created|sent` (validator)
+- `commit_vote_received|validated` (leader)
+- `commit_qc_formed|broadcasted` (leader)
+- `commit_qc_received|validated` (validator)
+
+Block & Safety:
+- `block_added` (all): block inserted into block tree
+- `locked_qc_updated` (all): locked QC updated from pre-commit QC
+- `safenode_check_passed|failed` (validator)
+- `block_committed` (all): block finalized (Simple HotStuff direct commit)
+
+View/Timeout/Pacemaker:
+- `view_timer_started`, `view_timeout_detected` (all)
+- `timeout_message_sent|received|validated` (all)
+- `view_change_started` (all)
+- `new_view_message_sent|received|validated` (leader/all)
+- `new_view_started`, `leader_elected` (all)
+
+Recovery/Storage/Sync:
+- `storage_tx_begin|storage_tx_commit|storage_tx_rollback` (all) with phase context
+- `state_sync_requested|state_sync_completed` (lagging nodes)
+
+Byzantine/Exclusion:
+- `equivocation_detected`, `byzantine_detected` (honest nodes)
+- `evidence_collected|evidence_broadcasted|evidence_stored` (honest nodes)
+- `validator_excluded`
+
+Partition/Mode:
+- `partition_mode_entered|partition_mode_exited` (all)
+
+Auxiliary:
+- `highest_qc_updated`, `view_synchronized` (all)
+
+Required payloads (selected):
+- Common: `view`
+- Block: `block_hash`, `parent_hash?`, `height`, `leader?`
+- Vote/QC: `phase`, `voter` (vote_*), `vote_count`, `required` (qc_*), `from_leader?`
+- View/timeout: `timeout_ms`, `sender`, `has_high_qc`, `timeout_cert_count`
+- Safety: `locked_view`, `justify_view`, `safenode`
+- Byzantine: `offender`, `evidence_id`
+
+Compatibility and Aliases:
+- Generic events remain as aliases during migration (e.g., `vote_created` ≈ `prepare_vote_created` in happy path)
+- Tests and diagram should transition to canonical names; alias usage is discouraged in new code
 
 ### Consensus Node Integration
 
@@ -452,6 +512,11 @@ func (cn *ConsensusNode) HandleProposal(proposal *ProposalMsg) error {
 **Testing Build**: `go build -tags testing ./...` (includes Byzantine behaviors)
 
 **Test Execution**: `go test -tags testing ./pkg/consensus/...`
+
+### Diagram & Test Anchoring (v1.1)
+
+- The HotStuff data flow diagram is to be annotated with “EMITS:” markers using the canonical event names above, especially for the proposal path and each phase’s vote/QC lifecycle.
+- The happy-path and flow-by-flow tests must assert phase-specific events (e.g., `prepare_vote_*`, `prepare_qc_*`, then `precommit_*`, `commit_*`), role-scoped occurrences, and ordering constraints.
 
 ### Validation Rule Sets
 

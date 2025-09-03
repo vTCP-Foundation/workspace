@@ -57,12 +57,14 @@ sequenceDiagram
             N->>N: Monitor heartbeats from peers
             N->>N: If <342 peers (2f+1) reachable for 3*Δ (30s)
             C->>C: Enter partition mode - stop voting
+            %% EMITS: partition_mode_entered {view}
             C->>C: Continue collecting messages
             C->>C: Wait for partition heal
         else Partition Healed
             N->>N: ≥342 peers reachable
             C->>C: Request state sync
             C->>C: Rejoin consensus at highest known view
+            %% EMITS: partition_mode_exited {view}
         end
     end
     
@@ -104,6 +106,7 @@ sequenceDiagram
         Note over C: Phase base timeouts: NEW_VIEW=4s, PROPOSE=2s, VOTE=1s each
         
         C->>C: [Pacemaker] start_phase_timer(phase)
+        %% EMITS: view_timer_started {view, timeout_ms}
         Note over C: Timer runs in background, triggers on_timeout() if expires
         
         %% State Transition Rules
@@ -130,16 +133,50 @@ sequenceDiagram
     
     Note over L,V: View v, Phase: Prepare
     
-    %% Block Proposal Phase
+    %% ====================================================================
+    %% HAPPY PATH CONSENSUS FLOW - ROLE-AWARE EMITS (Canonical v2.0)
+    %% ====================================================================
+    %% Event emissions by role perspective - each role emits different events
+    %% 
+    %% 🏆 LEADER ROLE EVENTS:
+    %% 1. NewView Collection: view_timer_started, new_view_message_received, 
+    %%    new_view_message_validated, highest_qc_updated
+    %% 2. Proposal: proposal_created, proposal_broadcasted  
+    %% 3. Vote Collection: prepare_vote_received, prepare_vote_validated,
+    %%    precommit_vote_received, precommit_vote_validated, commit_vote_received, commit_vote_validated
+    %% 4. QC Formation: prepare_qc_formed, precommit_qc_formed, commit_qc_formed
+    %% 5. QC Storage: storage_tx_begin, storage_tx_commit (for all QCs)
+    %% 6. QC Broadcasting: prepare_qc_broadcasted, precommit_qc_broadcasted, commit_qc_broadcasted
+    %%
+    %% 👥 VALIDATOR ROLE EVENTS:
+    %% 1. NewView: new_view_message_sent
+    %% 2. Proposal Processing: proposal_received, proposal_validated, safenode_check_passed, block_added
+    %% 3. Vote Creation: prepare_vote_created, precommit_vote_created, commit_vote_created
+    %% 4. Vote Sending: prepare_vote_sent, precommit_vote_sent, commit_vote_sent  
+    %% 5. QC Reception: prepare_qc_received, prepare_qc_validated, precommit_qc_received, 
+    %%    precommit_qc_validated, commit_qc_received, commit_qc_validated
+    %% 6. State Updates: locked_qc_updated, block_committed
+    %%
+    %% 🔄 ROLE-SPECIFIC EMISSIONS:
+    %% - Leaders: Focus on coordination, vote collection, QC formation/storage/broadcast
+    %% - Validators: Focus on proposal processing, vote creation/sending, QC reception/validation
+    %% ====================================================================
+    
+    %% Block Proposal Phase {#block-proposal-phase}
+    %% 🏆 LEADER EMITS: proposal_created {view, leader, parent_hash, height, block_hash}
     L->>C: Propose new block
     C->>C: Start NewView collection timer (2 * current_view_timeout)
+    %% 🏆 LEADER EMITS: view_timer_started {view, timeout_ms}
     C->>N: Collect NewView messages from ≥2f+1 validators
     
     alt Sufficient NewViews collected before timeout
         N-->>C: Return NewView messages (≥2f+1)
+        %% 🏆 LEADER EMITS: new_view_message_received {view, leader}
         C->>CR: Verify NewView signatures from distinct validators
         CR-->>C: Signatures valid
+        %% 🏆 LEADER EMITS: new_view_message_validated {view, leader, timeout_cert_count}
         C->>C: Set proposal.justify = maxQC among NewView messages
+        %% 🏆 LEADER EMITS: highest_qc_updated {view}
         C->>C: If multiple maxQCs with same view, select deterministically (by block hash)
         C->>S: Get parent block (parent = justify.block)
         S-->>C: Return parent block
@@ -155,18 +192,22 @@ sequenceDiagram
     else Conflicting highestQCs
         C->>C: Apply deterministic tie-breaking (prefer higher block hash)
         C->>C: Set proposal.justify = selected QC
+        %% EMITS: highest_qc_updated {view}
         C->>S: Get parent block (parent = justify.block)
         S-->>C: Return parent block
         C->>C: Create new block with justify QC
     end
     C->>CR: Sign block proposal (LeaderSig)
     CR-->>C: Return leader signature
+    %% 🏆 LEADER EMITS: proposal_broadcasted {view, leader, block_hash}
     C->>N: Broadcast(ProposalMsg)
     N-->>V: Send to all validators
+    %% 👥 VALIDATOR EMITS: proposal_received {view, leader, block_hash, receiver}
     
     Note over L,V: Validators receive proposal
     
-    %% Prepare Phase Processing with Error Handling
+    %% Prepare Phase Processing with Error Handling {#prepare-phase}
+    %% EMITS: proposal_received {view, leader, block_hash, receiver}
     V->>N: Receive ProposalMsg
     N->>C: Forward proposal
     
@@ -186,44 +227,58 @@ sequenceDiagram
         CR-->>C: Justify QC valid (≥2f+1 stake confirmed)
         C->>C: Verify parent == justify.block
         C->>C: Apply SAFENODE: (block extends from lockedQC.block) OR (justify.view > lockedQC.view)
+        %% 👥 VALIDATOR EMITS: safenode_check_passed {view, block_hash, locked_view, justify_view}
         C->>C: Ensure vote-once-per-view (no prior vote in this view)
         C->>CR: Verify proposal signature
         CR-->>C: Signature valid
+        %% 👥 VALIDATOR EMITS: proposal_validated {view, leader, block_hash, safenode:true}
         C->>BT: Add block to tree
         BT->>S: Store block
         S-->>BT: Block stored
         BT-->>C: Block added
+        %% 👥 VALIDATOR EMITS: block_added {view, block_hash, parent_hash, height}
+        %% 👥 VALIDATOR EMITS: prepare_vote_created {view, voter, block_hash}
         C->>CR: Sign prepare vote
         CR-->>C: Return vote signature
+        %% 👥 VALIDATOR EMITS: prepare_vote_sent {view, voter, block_hash, leader}
         C->>N: Send vote to leader
         N-->>L: Deliver vote
+        %% 🏆 LEADER EMITS: prepare_vote_received {view, voter, block_hash}
+        %% 🏆 LEADER EMITS: prepare_vote_validated {view, voter, block_hash}
     else Invalid View Number
         C->>C: Reject proposal (wrong view)
+        %% EMITS: proposal_rejected {view, block_hash, reason:view_invalid}
         C->>N: Send view-change timeout
         N-->>V: Broadcast timeout
     else Invalid Parent
         C->>C: Reject proposal (invalid parent)
+        %% EMITS: proposal_rejected {view, block_hash, reason:parent_invalid}
         Note over C: No vote sent
     else Invalid Justify QC
         C->>CR: Verify justify QC signatures
         CR-->>C: Justify QC invalid
         C->>C: Reject proposal (justify QC fails verification or is stale vs parent)
+        %% EMITS: proposal_rejected {view, block_hash, reason:justify_qc_invalid}
         Note over C: Potential byzantine behavior detected
     else Parent Mismatch
         C->>C: Verify parent == justify.block
         C->>C: Reject proposal (parent != justify.block)
+        %% EMITS: proposal_rejected {view, block_hash, reason:parent_mismatch}
         Note over C: Byzantine leader behavior
     else SAFENODE Violation
         C->>C: Reject proposal (SAFENODE predicate failed)
+        %% EMITS: proposal_rejected {view, block_hash, reason:safenode_violated}
         Note over C: No vote sent
     else Duplicate Vote
         C->>C: Check for existing vote in view
         C->>C: Reject proposal (already voted in this view)
+        %% EMITS: proposal_rejected {view, block_hash, reason:duplicate_vote_prevented}
         Note over C: Equivocation prevention
     else Invalid Signature
         C->>CR: Verify proposal signature
         CR-->>C: Signature invalid
         C->>C: Reject proposal (bad signature)
+        %% EMITS: proposal_rejected {view, block_hash, reason:signature_invalid}
         Note over C: Potential byzantine behavior detected
     else Network Failure
         N->>N: Message delivery failed
@@ -232,7 +287,8 @@ sequenceDiagram
     
     Note over L,V: Leader collects prepare votes
     
-    %% Prepare QC Formation with Error Handling
+    %% Prepare QC Formation with Error Handling {#prepare-qc-formation}
+    %% EMITS: prepare_vote_received {view, voter, block_hash}
     L->>C: Receive prepare votes
     C->>C: Initialize vote accumulator for (view, phase=prepare, block)
     
@@ -262,9 +318,11 @@ sequenceDiagram
                 CR->>CR: Check each signature is from unique validator in current validator set
                 CR->>CR: Verify each validator has appropriate voting power
                 CR-->>C: Signatures valid (≥2f+1 stake confirmed)
+                %% EMITS: prepare_qc_formed {view, block_hash, vote_count, required}
                 C->>C: Form QC with bitmap and aggregated signatures
                 C->>C: Stop accepting votes for this (view, phase)
                 C->>C: Prepare atomic write batch
+                %% 🏆 LEADER EMITS: storage_tx_begin {phase:prepare, view, block_hash}
                 C->>S: BEGIN TRANSACTION
                 S->>S: Write PrepareQC data with version number
                 S->>S: Write view number update
@@ -272,16 +330,20 @@ sequenceDiagram
                 S->>S: Calculate and write state checksum
                 alt Write successful
                     S->>S: COMMIT with fsync
+                    %% 🏆 LEADER EMITS: storage_tx_commit {phase:prepare, view, block_hash}
                     S-->>C: QC stored atomically
                     C->>C: Update in-memory state
                 else Write failed or crash
                     S->>S: ROLLBACK
+                    %% EMITS: storage_tx_rollback {phase:prepare, view, block_hash}
                     S-->>C: Storage error
                     C->>C: Retain previous consistent state
                     C->>C: Trigger recovery protocol
                 end
+                %% EMITS: prepare_qc_broadcasted {view, block_hash, vote_count}
                 C->>N: Broadcast(PrepareQC)
                 N-->>V: Send PrepareQC to validators
+                %% EMITS: prepare_qc_received {view, block_hash, from_leader}
             else Timeout reached
                 C->>C: Stop vote collection
                 C->>C: Proceed to timeout handling
@@ -307,21 +369,29 @@ sequenceDiagram
     
     Note over L,V: Pre-Commit Phase begins
     
-    %% Pre-Commit Phase
+    %% Pre-Commit Phase {#precommit-phase}
     Note over L,V: PrepareQC already broadcast in previous phase
+    %% EMITS: prepare_qc_received {view, block_hash, from_leader}
     V->>C: Receive PrepareQC
     C->>CR: Verify all QC signatures (≥2f+1 distinct validators)
     CR->>CR: Check each signature is from unique validator in current validator set
     CR->>CR: Verify total stake of signers ≥2f+1
     CR-->>C: QC valid
+    %% EMITS: prepare_qc_validated {view, block_hash, vote_count, required}
     C->>C: If PrepareQC.view ≥ lockedQC.view, set lockedQC = PrepareQC.block
+    %% EMITS: locked_qc_updated {view, block_hash}
     C->>C: Ensure vote-once-per-view-per-phase (no prior pre-commit vote)
+    %% EMITS: precommit_vote_created {view, voter, block_hash}
     C->>CR: Sign pre-commit vote  
     CR-->>C: Return vote signature
+    %% EMITS: precommit_vote_sent {view, voter, block_hash, leader}
     C->>N: Send pre-commit vote
     N-->>L: Deliver vote
+    %% EMITS: precommit_vote_received {view, voter, block_hash}
+    %% EMITS: precommit_vote_validated {view, voter, block_hash}
     
-    %% Pre-Commit QC Formation
+    %% Pre-Commit QC Formation {#precommit-qc-formation}
+    %% EMITS: precommit_vote_received {view, voter, block_hash}
     L->>C: Collect pre-commit votes
     C->>C: Check vote threshold (≥2f+1 distinct validators)
     C->>C: Ensure all counted votes reference same block and view
@@ -329,8 +399,10 @@ sequenceDiagram
     CR->>CR: Check each signature is from unique validator in current validator set
     CR->>CR: Verify each validator has appropriate voting power
     CR-->>C: Signatures valid (≥2f+1 stake confirmed)
+    %% EMITS: precommit_qc_formed {view, block_hash, vote_count, required}
     C->>C: Form Pre-Commit QC
     C->>C: Prepare atomic write batch
+    %% 🏆 LEADER EMITS: storage_tx_begin {phase:precommit, view, block_hash}
     C->>S: BEGIN TRANSACTION
     S->>S: Write PreCommitQC data with version number
     S->>S: Write view number update
@@ -339,10 +411,12 @@ sequenceDiagram
     S->>S: Calculate and write state checksum
     alt Write successful
         S->>S: COMMIT with fsync
+        %% 🏆 LEADER EMITS: storage_tx_commit {phase:precommit, view, block_hash}
         S-->>C: QC stored atomically
         C->>C: Update in-memory state
     else Write failed or crash
         S->>S: ROLLBACK
+        %% EMITS: storage_tx_rollback {phase:precommit, view, block_hash}
         S-->>C: Storage error
         C->>C: Retain previous consistent state
         C->>C: Trigger recovery protocol
@@ -350,21 +424,29 @@ sequenceDiagram
     
     Note over L,V: Commit Phase begins
     
-    %% Commit Phase
+    %% Commit Phase {#commit-phase}
+    %% EMITS: precommit_qc_broadcasted {view, block_hash, vote_count}
     C->>N: Broadcast(PreCommitQC)
     N-->>V: Send QC to validators
+    %% EMITS: precommit_qc_received {view, block_hash, from_leader}
     V->>C: Receive PreCommitQC
     C->>CR: Verify all QC signatures (≥2f+1 distinct validators)
     CR->>CR: Check each signature is from unique validator in current validator set
     CR->>CR: Verify total stake of signers ≥2f+1
     CR-->>C: QC valid
+    %% EMITS: precommit_qc_validated {view, block_hash, vote_count, required}
     C->>C: Ensure vote-once-per-view-per-phase (no prior commit vote)
+    %% EMITS: commit_vote_created {view, voter, block_hash}
     C->>CR: Sign commit vote
     CR-->>C: Return vote signature
+    %% EMITS: commit_vote_sent {view, voter, block_hash, leader}
     C->>N: Send commit vote
     N-->>L: Deliver vote
+    %% EMITS: commit_vote_received {view, voter, block_hash}
+    %% EMITS: commit_vote_validated {view, voter, block_hash}
     
-    %% Commit QC Formation
+    %% Commit QC Formation {#commit-qc-formation}
+    %% EMITS: commit_vote_received {view, voter, block_hash}
     L->>C: Collect commit votes
     C->>C: Check vote threshold (≥2f+1 distinct validators)
     C->>C: Ensure all counted votes reference same block and view
@@ -372,8 +454,10 @@ sequenceDiagram
     CR->>CR: Check each signature is from unique validator in current validator set
     CR->>CR: Verify each validator has appropriate voting power
     CR-->>C: Signatures valid (≥2f+1 stake confirmed)
+    %% EMITS: commit_qc_formed {view, block_hash, vote_count, required}
     C->>C: Form Commit QC
     C->>C: Prepare atomic write batch
+    %% 🏆 LEADER EMITS: storage_tx_begin {phase:commit, view, block_hash}
     C->>S: BEGIN TRANSACTION
     S->>S: Write CommitQC data with version number
     S->>S: Write view number update
@@ -382,10 +466,12 @@ sequenceDiagram
     S->>S: Calculate and write state checksum
     alt Write successful
         S->>S: COMMIT with fsync
+        %% 🏆 LEADER EMITS: storage_tx_commit {phase:commit, view, block_hash}
         S-->>C: QC stored atomically
         C->>C: Update in-memory state
     else Write failed or crash
         S->>S: ROLLBACK
+        %% EMITS: storage_tx_rollback {phase:commit, view, block_hash}
         S-->>C: Storage error
         C->>C: Retain previous consistent state
         C->>C: Trigger recovery protocol
@@ -394,15 +480,19 @@ sequenceDiagram
     
     Note over L,V: Decide Phase begins
     
-    %% Decide Phase & Block Commit (Simple HotStuff - Direct Commit)
+    %% Decide Phase & Block Commit (Simple HotStuff - Direct Commit) {#decide-phase}
+    %% EMITS: commit_qc_broadcasted {view, block_hash, vote_count}
     C->>N: Broadcast(CommitQC)
     N-->>V: Send QC to validators
+    %% EMITS: commit_qc_received {view, block_hash, from_leader}
     V->>C: Receive CommitQC
     C->>CR: Verify all QC signatures (≥2f+1 distinct validators)
     CR->>CR: Check each signature is from unique validator in current validator set
     CR->>CR: Verify total stake of signers ≥2f+1
     CR-->>C: QC valid
+    %% EMITS: commit_qc_validated {view, block_hash, vote_count, required}
     Note over C: Simple HotStuff: Direct commit of block referenced by CommitQC<br/>(Not pipelined: no two-chain rule, no indirect commit)
+    %% EMITS: block_committed {view, block_hash, height}
     C->>BT: Mark block as committed (simple HotStuff rule)
     BT->>S: Update committed height
     S-->>BT: Height updated
@@ -419,13 +509,18 @@ sequenceDiagram
         
         alt Timeout in Any Phase
             C->>C: [Pacemaker] Phase timeout detected
+            %% EMITS: view_timeout_detected {view, validator}
             Note over C: Timeout = min(baseTimeout * 2^min(view, 10), maxTimeout)<br/>baseTimeout=1s, maxTimeout=60s
             C->>CR: Sign timeout message
             CR-->>C: Return signature
             C->>N: Broadcast timeout
+            %% EMITS: timeout_message_sent {view, validator}
             N-->>V: Send to validators
             V->>C: Collect timeout messages (≥2f+1)
+            %% EMITS: timeout_message_received {view, validator, sender}
+            %% EMITS: timeout_message_validated {view, validator, sender}
             C->>C: [Pacemaker] Advance to next view
+            %% EMITS: view_change_started {from_view, to_view}
             C->>C: [Pacemaker] Wait for view synchronization
             
             alt Fast path - recent QC available
@@ -441,9 +536,14 @@ sequenceDiagram
             
             C->>C: [Pacemaker] Enter synchronized view
             C->>N: [Pacemaker] Broadcast(NewViewMsg, view, highestQC)
+            %% EMITS: new_view_message_sent {view, leader}
             N-->>L: Deliver NewView to new leader
+            %% EMITS: new_view_message_received {view, leader}
             Note over L: Collect NewViewMsg (≥2f+1)
             C->>C: [Pacemaker] Select new leader (round-robin)
+            %% EMITS: leader_elected {view, leader}
+            C->>C: [Pacemaker] start_phase_timer(phase)
+            %% EMITS: view_timer_started {view, timeout_ms}
         else Leader Failure
             Note over L: Leader becomes unresponsive
             V->>V: [Pacemaker] Detect leader silence
@@ -455,6 +555,7 @@ sequenceDiagram
             C->>C: Insufficient connectivity detected
             C->>C: Enter recovery mode
         end
+        %% EMITS: new_view_started {view, leader}
     end
     
     %% State Synchronization Protocol
@@ -464,6 +565,7 @@ sequenceDiagram
         alt Node Behind (Missing Blocks)
             C->>C: Detect fallen behind (view < network_view - SYNC_THRESHOLD)
             C->>N: Send StateSyncRequest{from_height, to_view, include_proofs=true}
+            %% EMITS: state_sync_requested {from_height, target_view}
             N->>V: Query ≥171 peers (f+1) for state
             
             %% Peers prepare response
@@ -501,6 +603,7 @@ sequenceDiagram
                 S->>S: Calculate and store state checksum
                 S->>S: COMMIT with fsync
                 S-->>C: Sync persisted
+                %% EMITS: state_sync_completed {target_view, validator}
                 
             else Verification failed
                 C->>C: Mark responding peers as potentially Byzantine
@@ -545,6 +648,7 @@ sequenceDiagram
         %% Equivocation Detection (Double Voting)
         alt Equivocation Detection
             C->>C: Detect double voting (same validator, same view/phase, different blocks)
+            %% EMITS: equivocation_found {validator, view, phase, block1_hash, block2_hash}
             C->>C: Collect both conflicting votes as evidence
             C->>LOG: Log EQUIVOCATION event with full details
             Note over LOG: {validator: X, type: "double_vote", view: V, phase: P,<br/>block1: hash1, sig1: bytes, block2: hash2, sig2: bytes,<br/>timestamp: T, potential_victims: [affected_nodes]}
@@ -552,10 +656,14 @@ sequenceDiagram
             S->>S: Write both votes with signatures to evidence store
             S->>S: Calculate evidence hash for future reference
             S-->>C: Evidence stored with ID
+            %% EMITS: evidence_stored {validator, evidence_type:equivocation, evidence_id, view}
             C->>N: Broadcast EvidenceMsg(EQUIVOCATION, validator, proofs, signature)
+            %% EMITS: evidence_broadcasted {validator, evidence_type:equivocation, view}
             N-->>V: Propagate to all validators for awareness
             C->>C: Exclude validator from current and future QCs in this view
+            %% EMITS: validator_excluded {validator, view, reason:equivocation}
             C->>C: Mark validator as Byzantine in memory (no slashing)
+            %% EMITS: byzantine_detected {validator, behavior_type:equivocation, view}
             
         else Invalid QC Received
             C->>CR: Verify QC integrity (signatures, bitmap, threshold)
@@ -564,26 +672,34 @@ sequenceDiagram
             alt Forged signatures
                 C->>LOG: Log FORGED_QC event
                 Note over LOG: {leader: X, type: "forged_qc", view: V,<br/>invalid_sigs: [list], claimed_validators: [list],<br/>qc_hash: H, timestamp: T}
+                %% EMITS: byzantine_detected {validator:leader, behavior_type:forged_qc, view}
             else Insufficient stake
                 C->>LOG: Log INVALID_QC_STAKE event
                 Note over LOG: {leader: X, type: "insufficient_stake", view: V,<br/>claimed_stake: S1, actual_stake: S2, signers: [list]}
+                %% EMITS: byzantine_detected {validator:leader, behavior_type:insufficient_stake, view}
             else Duplicate validators in QC
                 C->>LOG: Log QC_DUPLICATION event
                 Note over LOG: {leader: X, type: "duplicate_validators", view: V,<br/>duplicated: [list], qc_data: bytes}
+                %% EMITS: byzantine_detected {validator:leader, behavior_type:duplicate_validators, view}
             end
             C->>S: Store invalid QC with analysis
             S-->>C: Evidence archived
+            %% EMITS: evidence_stored {validator:leader, evidence_type:invalid_qc, evidence_id, view}
             C->>C: Reject QC and mark leader as potentially Byzantine
             
         else Conflicting Proposals (Same View)
             C->>C: Detect multiple proposals for same view from same leader
+            %% EMITS: equivocation_found {validator:leader, view, phase:proposal, block1_hash, block2_hash}
             C->>LOG: Log CONFLICTING_PROPOSALS event
             Note over LOG: {leader: X, type: "conflicting_proposals", view: V,<br/>proposal1: {block: B1, justify: Q1, sig: S1, recipients: [list]},<br/>proposal2: {block: B2, justify: Q2, sig: S2, recipients: [list]},<br/>timestamp: T, network_partition: possible}
             C->>S: Store both proposals with full data
             S-->>C: Evidence logged
+            %% EMITS: evidence_stored {validator:leader, evidence_type:conflicting_proposals, evidence_id, view}
             C->>N: Broadcast evidence to network
+            %% EMITS: evidence_broadcasted {validator:leader, evidence_type:conflicting_proposals, view}
             N-->>V: Alert all validators
             C->>C: Leader marked Byzantine for this view
+            %% EMITS: byzantine_detected {validator:leader, behavior_type:conflicting_proposals, view}
             
         else Fork Detection & Resolution
             C->>BT: Detect competing chains at same height
@@ -604,8 +720,10 @@ sequenceDiagram
             alt Byzantine fork (conflicting QCs exist)
                 C->>LOG: Log BYZANTINE_FORK event
                 Note over LOG: {type: "byzantine_fork", perpetrator: X,<br/>evidence: [conflicting_qcs], affected_height: H}
+                %% EMITS: byzantine_detected {validator:perpetrator, behavior_type:byzantine_fork, view, height}
                 C->>S: Store fork evidence
                 S-->>C: Evidence stored
+                %% EMITS: evidence_stored {validator:perpetrator, evidence_type:byzantine_fork, evidence_id, view}
             else Natural fork (network delay in simple HotStuff)
                 C->>LOG: Log NATURAL_FORK event
                 Note over LOG: {type: "natural_fork", cause: "network_delay",<br/>duration: D, affected_validators: N}<br/>Note: Simple HotStuff may have temporary forks during view changes
