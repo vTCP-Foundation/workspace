@@ -22,7 +22,7 @@ Sender → S1 → S2 → Exchange/Bridge → R2 → R1 → Receiver
 **Message Types:**
 - Initiation: `InitiateMaxFlowForExchangeCalculationMessage`
 - Topology requests: `MaxFlowCalculation{Source/Target}{Fst/Snd}LevelMessage`
-- Responses: `ResultMaxFlowCalculationMessage` + `ExchangeRatesMessage` (when needed)
+- Responses: `ResultMaxFlowCalculationMessage` (+ optional Commission) + `ExchangeRatesMessage` (when needed)
 
 ## 1. Overview
 
@@ -186,23 +186,23 @@ sequenceDiagram
         loop For each payer equivalent (BTC, ETH)
             S->>+S1: MaxFlowCalculationSourceFstLevelMessage<br/>(equivalent=BTC/ETH, exchangeEquivalents=[USD])
             Note over S1: MaxFlowCalculationSourceFstLevelTransaction starts
-            S1-->>S: ResultMaxFlowCalculationMessage<br/>+ ExchangeRatesMessage (if cross-equivalent)
+            S1-->>S: ResultMaxFlowCalculationMessage (+ Commission if present)<br/>+ ExchangeRatesMessage (if cross-equivalent)
             
             S1->>+S2: MaxFlowCalculationSourceSndLevelMessage<br/>(equivalent=BTC/ETH, exchangeEquivalents=[USD])
             Note over S2: MaxFlowCalculationSourceSndLevelTransaction starts
-            S2-->>S: ResultMaxFlowCalculationMessage<br/>+ ExchangeRatesMessage (if cross-equivalent)
+            S2-->>S: ResultMaxFlowCalculationMessage (+ Commission if present)<br/>+ ExchangeRatesMessage (if cross-equivalent)
         end
     and Receiver Side Collection
         R->>+R1: MaxFlowCalculationTargetFstLevelMessage<br/>(equivalent=USD, exchangeEquivalents=[BTC,ETH])
         Note over R1: MaxFlowCalculationTargetFstLevelTransaction starts
-        R1-->>S: ResultMaxFlowCalculationMessage<br/>+ ExchangeRatesMessage (if cross-equivalent)
+        R1-->>S: ResultMaxFlowCalculationMessage (+ Commission if present)<br/>+ ExchangeRatesMessage (if cross-equivalent)
         
         R1->>+R2: MaxFlowCalculationTargetSndLevelMessage<br/>(equivalent=USD, exchangeEquivalents=[BTC,ETH])
         Note over R2: MaxFlowCalculationTargetSndLevelTransaction starts
-        R2-->>S: ResultMaxFlowCalculationMessage<br/>+ ExchangeRatesMessage (if cross-equivalent)
+        R2-->>S: ResultMaxFlowCalculationMessage (+ Commission if present)<br/>+ ExchangeRatesMessage (if cross-equivalent)
     end
     
-    R-->>S: ResultMaxFlowCalculationMessage
+    R-->>S: ResultMaxFlowCalculationMessage (+ Commission if present)
 
     Note over S: Topology collected<br/>Exchange rates collected (if needed)<br/>OR-Tools optimization<br/>Maximum receivable amounts calculated
 ```
@@ -218,11 +218,11 @@ sequenceDiagram
 
 | **Receiving Node** | **Incoming Message** | **Transaction Started** | **Outgoing Messages** |
 |-------------------|---------------------|------------------------|----------------------|
-| **R** | `InitiateMaxFlowForExchangeCalculationMessage` | `ReceiveMaxFlowCalculationForExchangeOnTargetTransaction` | `MaxFlowCalculationTargetFstLevelMessage` → R1<br/>`ResultMaxFlowCalculationMessage` → S |
-| **S1** | `MaxFlowCalculationSourceFstLevelMessage`<br/>(per payer equivalent) | `MaxFlowCalculationSourceFstLevelTransaction` | `MaxFlowCalculationSourceSndLevelMessage` → S2<br/>`ResultMaxFlowCalculationMessage` → S<br/>`ExchangeRatesMessage` → S |
-| **S2** | `MaxFlowCalculationSourceSndLevelMessage` | `MaxFlowCalculationSourceSndLevelTransaction` | `ResultMaxFlowCalculationMessage` → S<br/>`ExchangeRatesMessage` → S |
-| **R1** | `MaxFlowCalculationTargetFstLevelMessage` | `MaxFlowCalculationTargetFstLevelTransaction` | `MaxFlowCalculationTargetSndLevelMessage` → R2<br/>`ResultMaxFlowCalculationMessage` → S<br/>`ExchangeRatesMessage` → S |
-| **R2** | `MaxFlowCalculationTargetSndLevelMessage` | `MaxFlowCalculationTargetSndLevelTransaction` | `ResultMaxFlowCalculationMessage` → S<br/>`ExchangeRatesMessage` → S |
+| **R** | `InitiateMaxFlowForExchangeCalculationMessage` | `ReceiveMaxFlowCalculationForExchangeOnTargetTransaction` | `MaxFlowCalculationTargetFstLevelMessage` → R1<br/>`ResultMaxFlowCalculationMessage` (+ Commission if present) → S |
+| **S1** | `MaxFlowCalculationSourceFstLevelMessage`<br/>(per payer equivalent) | `MaxFlowCalculationSourceFstLevelTransaction` | `MaxFlowCalculationSourceSndLevelMessage` → S2<br/>`ResultMaxFlowCalculationMessage` (+ Commission if present) → S<br/>`ExchangeRatesMessage` → S |
+| **S2** | `MaxFlowCalculationSourceSndLevelMessage` | `MaxFlowCalculationSourceSndLevelTransaction` | `ResultMaxFlowCalculationMessage` (+ Commission if present) → S<br/>`ExchangeRatesMessage` → S |
+| **R1** | `MaxFlowCalculationTargetFstLevelMessage` | `MaxFlowCalculationTargetFstLevelTransaction` | `MaxFlowCalculationTargetSndLevelMessage` → R2<br/>`ResultMaxFlowCalculationMessage` (+ Commission if present) → S<br/>`ExchangeRatesMessage` → S |
+| **R2** | `MaxFlowCalculationTargetSndLevelMessage` | `MaxFlowCalculationTargetSndLevelTransaction` | `ResultMaxFlowCalculationMessage` (+ Commission if present) → S<br/>`ExchangeRatesMessage` → S |
 
 ### 4.3. Initiation Phase
 
@@ -265,25 +265,35 @@ sequenceDiagram
 **R (Receiver) sends to S:**
 - All non-zero incoming flows into R from its neighbors in `mEquivalent`
 
+- Optional `Commission` for `mEquivalent` if configured
+
 **S1 nodes (per payer equivalent) send to S:**
 - Incoming payment flow into S1 from S in the current payer equivalent
 - All non-zero outgoing payment flows from S1 to other neighbors in the same payer equivalent
 - If payer and receiver equivalents differ: Exchange rates for `mEquivalent/current_payer_equivalent`
+
+- Optional `Commission` for the current payer equivalent if configured
 
 **S2 nodes (per payer equivalent) send to S:**
 - Incoming payment flow into S2 from S1 in the current payer equivalent
 - All non-zero outgoing payment flows from S2 to other neighbors in the same payer equivalent
 - If payer and receiver equivalents differ: Exchange rates for `mEquivalent/current_payer_equivalent`
 
+- Optional `Commission` for the current payer equivalent if configured
+
 **R1 nodes send to S:**
 - Outgoing payment flow from R1 to R in `mEquivalent`
 - All non-zero incoming payment flows into R1 from other neighbors in `mEquivalent`
 - If payer and receiver equivalents differ: Exchange rates for `payer_equivalent[i]/mEquivalent`
 
+- Optional `Commission` for `mEquivalent` if configured
+
 **R2 nodes send to S:**
 - Outgoing payment flow from R2 to R1 in `mEquivalent`
 - All non-zero incoming payment flows into R2 from other neighbors in `mEquivalent`
 - If payer and receiver equivalents differ: Exchange rates for `payer_equivalent[i]/mEquivalent`
+
+- Optional `Commission` for `mEquivalent` if configured
 
 ## 5. Exchange Rate Management
 
@@ -311,6 +321,25 @@ Exchange-capable nodes provide exchange rate information through `ExchangeRatesM
 - `mExchangeRatesTail`: Dedicated queue for `ExchangeRatesMessage` processing
 - **Message Routing**: `IncomingRemoteNode::tryCollectNextPacket()` routes exchange messages
 - **Processing**: `BaseCollectTopologyForExchangeTransaction::fillRates()` processes exchange data
+
+## 5a. Commission Management
+
+### 5a.1. Definition and Configuration
+- Each node may define fixed per-transit commissions per equivalent in `conf.json`.
+- Commission is a fixed fee (`uint64 amount`) independent of payment size.
+
+### 5a.2. Message Inclusion
+- `ResultMaxFlowCalculationMessage` and `ResultMaxFlowCalculationGatewayMessage` include optional `Commission` for the message `equivalent` when present on the sending node.
+- Only the Source/Target Fst/Snd Level transactions attach commissions.
+
+### 5a.3. Payer-Side Storage and TTL
+- The payer (S) stores received commissions in `TopologyTrustLinesManager` as map `<ContractorID, SerializedEquivalent> -> <Commission, expiredAt>`.
+- Store only when `amount > 0`. On insert/update set `expiredAt = now() + 300s`.
+- TTL cleanup mirrors `ExchangeRatesManager`’s approach for removing expired entries.
+
+### 5a.4. Application in Path Calculation
+- When constructing feasible paths and computing effective amounts, subtract the sum of fixed commissions along the path (clamped at zero when cumulative commissions exceed the path flow).
+- OR-Tools optimization must factor in these fixed deductions in the objective and feasibility constraints.
 
 ## 6. Hops Count Parameter
 

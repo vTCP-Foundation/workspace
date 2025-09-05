@@ -95,7 +95,7 @@ The primary goals of this iteration are to enhance network connectivity and prov
 #### New Features/Enhancements
 1. **Multi-equivalent topology collection**: Extended message protocol to include exchange rate information
 2. **Exchange-aware transaction types**: New transaction classes for multi-equivalent flow calculation
-3. **OR-Tools integration**: Library integration for optimal flow calculation
+3. **OR-Tools integration**: Library integration for optimal flow calculation (including fixed per-node commissions)
 4. **Unified contractor management**: Consistent node identification across equivalents
 5. **External exchange rate storage**: Management of exchange rates from network participants
 
@@ -218,7 +218,9 @@ This iteration establishes the foundation for:
 
 1. **Extended Message Protocol**
    - **Current State**: Max flow calculation messages support single equivalent only
-   - **Proposed Changes**: Add vector<SerializedEquivalent> exchangeEquivalents parameter to all max flow messages
+   - **Proposed Changes**:
+     - Add `vector<SerializedEquivalent> exchangeEquivalents` parameter to all max flow messages
+     - Include optional `Commission` for the specific `equivalent` in `ResultMaxFlowCalculationMessage` and `ResultMaxFlowCalculationGatewayMessage`
    - **Impact Assessment**: Backward compatible - empty vector maintains existing behavior
    - **Migration Strategy**: Gradual rollout with version compatibility
 
@@ -299,6 +301,22 @@ This iteration establishes the foundation for:
 - **External Exchange Rates Storage**: Map structure in ExchangeRatesManager for network-sourced exchange rates
 - **Enhanced Message Types**: All max flow calculation messages extended with exchangeEquivalents parameter
 
+##### Commission
+- **Fields**:
+  - `uint64_t amount` (fixed fee in the message `equivalent`)
+- **Notes**:
+  - Fixed, per-transit fee independent of payment amount.
+  - Included in topology result messages only when `amount > 0` is configured on the sending node.
+
+##### CommissionsManager
+- **Purpose**: Store per-equivalent commissions for the local node; read from `conf.json` on startup
+- **Storage**: `map<SerializedEquivalent, Commission>`
+- **Methods**:
+  - `optional<Commission> get(SerializedEquivalent)`
+  - `TrustLineAmount applyCommission(const TrustLineAmount &in)` — subtracts fixed fee; clamps to zero
+- **Constants**:
+  - `kCommissionsTTLSeconds = 300` (used for payer-side cached entries; node config-based commissions do not expire)
+
 ##### ExchangeRate (per `src/core/rates/ExchangeRate.h`)
 - **Fields**:
   - `SerializedEquivalent equivalentFrom`
@@ -317,10 +335,40 @@ This iteration establishes the foundation for:
 - Usage: sent by source/target level transactions when relevant exchange rates are available.
 - Backward compatibility: absence of this message implies no exchange rates provided.
 
+##### Result Messages (Updated)
+- `ResultMaxFlowCalculationMessage` and `ResultMaxFlowCalculationGatewayMessage` now may include an optional `Commission` for their `equivalent` when present on the sending node. Only the following transactions may attach commissions:
+  - `MaxFlowCalculationSourceFstLevelTransaction`
+  - `MaxFlowCalculationSourceSndLevelTransaction`
+  - `MaxFlowCalculationTargetFstLevelTransaction`
+  - `MaxFlowCalculationTargetSndLevelTransaction`
+
 #### Data Storage
 - Exchange rate information stored in memory with TTL expiration
 - Unified contractor ID mapping in ContractorsManager
 - No persistent storage requirements for this iteration
+
+##### Payer-Side Commission Cache in TopologyTrustLinesManager
+- **Map**: key `<ContractorID, SerializedEquivalent>` → value `<Commission, expiresAt>`
+- **Rules**:
+  - Insert/update only when `Commission.amount > 0`
+  - On insert or refresh, set `expiresAt = now() + 300s`
+  - TTL cleanup procedure mirrors ExchangeRatesManager’s handling of `mExchangeRates` and `mExternalExchangeRates`
+- **Constants**:
+  - `kCommissionsTTLSeconds = 300`
+
+#### Configuration (conf.json)
+- Commissions are configured per node in `conf.json` under a dedicated section, for example:
+```
+{
+  "commissions": {
+    "byEquivalent": {
+      "1": { "amount": 10 },
+      "2": { "amount": 0 }
+    }
+  }
+}
+```
+- Semantics: `amount` is a fixed fee in the corresponding `SerializedEquivalent` units. Zero omits commission from outgoing messages.
 
 ##### ExchangeRatesManager: external rates storage and TTL
 - `mExternalExchangeRates`: `map<pair<SerializedEquivalent, SerializedEquivalent>, vector<pair<ContractorID, ExchangeRate>>>`
@@ -338,13 +386,13 @@ This iteration establishes the foundation for:
 ### OR-Tools Integration Specifications
 
 #### Problem Type
-**Linear Programming Optimization Problem**: Maximize the total amount received by the target in the target equivalent, considering exchange rates and capacity constraints. This is NOT a pure maximum flow problem, but rather a multi-objective optimization where exchange rates directly affect the objective function.
+**Linear Programming Optimization Problem**: Maximize the total amount received by the target in the target equivalent, considering exchange rates, capacity constraints, and fixed per-node commissions along the path. This is NOT a pure maximum flow problem; fixed commissions reduce effective deliverables and must be reflected in the objective and feasibility.
 
 #### Mathematical Model for Linear Programming
 
-**Objective Function**:
+**Objective Function (with commissions)**:
 ```
-Maximize: Σ(flow_path_i × effective_exchange_rate_i)
+Maximize: Σ(max(0, flow_path_i_after_commissions) × effective_exchange_rate_i)
 ```
 Where each path contributes to the total received amount based on its flow and the exchange rate along that path.
 
@@ -355,7 +403,7 @@ Where each path contributes to the total received amount based on its flow and t
 **Constraints**:
 1. **Capacity Constraints**: `flow[path_i] ≤ min_capacity_along_path_i`
 2. **Exchange Limits**: `min_exchange ≤ exchange_amount[j, from, to] ≤ max_exchange`
-3. **Balance Constraints**: Input flows = Output flows at each node
+3. **Balance Constraints (Adjusted)**: Input flows = Output flows at each node, with per-node fixed deductions accounted for on traversals
 4. **Sender Balance**: Total outflow ≤ available balance per equivalent
 5. **Non-negativity**: All flows ≥ 0
 
@@ -408,10 +456,13 @@ MPSolver::ResultStatus result_status = solver->Solve();
 - More memory efficient for very large networks
 - Standard approach but requires additional algorithmic work
 
-**Recommended Path-Based Implementation Strategy**:
+**Recommended Path-Based Implementation Strategy (with commissions)**:
 1. **Path Enumeration Phase**: Pre-compute all feasible paths during LP setup
 2. **Path Variable Creation**: One variable per enumerated path with capacity constraints
-3. **Exchange Rate Integration**: Objective coefficients reflect end-to-end exchange rates per path
+3. **Exchange Rate + Commissions Integration**:
+   - Compute cumulative fixed commissions for the path: `C_path = Σ c(node_k, equiv_k)` over transited nodes in the path’s equivalents
+   - Define `effective_flow_path = max(0, flow_var - C_path)`
+   - Objective coefficient reflects `effective_flow_path × effective_exchange_rate`
 4. **Direct Path Results**: Solution variables directly map to path flows without decomposition
 
 **Path Enumeration Algorithm**:
@@ -469,13 +520,22 @@ for (const auto& path : feasible_paths) {
 }
 ```
 
-**Step 2: LP Problem Construction**
+**Step 2: LP Problem Construction (with commissions)**
 ```cpp
 // Objective: maximize total received amount
 MPObjective* objective = solver->MutableObjective();
 for (size_t i = 0; i < feasible_paths.size(); i++) {
     double effective_rate = feasible_paths[i].calculateEffectiveExchangeRate();
+    double commissions_sum = feasible_paths[i].sumFixedCommissions(); // sum of fixed fees along path
+    // Model: max(0, f - C) * rate. One practical linearization for f ≥ 0:
+    // If f ≤ C, the solver will push f to 0 due to no positive contribution.
+    // Otherwise, coefficient can be applied to f, and feasibility constraints ensure f ≥ C for any positive contribution.
     objective->SetCoefficient(path_flow_vars[i], effective_rate);
+
+    // Add feasibility: path_flow_vars[i] ≥ commissions_sum to allow positive contribution, else f may be 0
+    auto* feas = solver->MakeRowConstraint(0.0, solver->infinity(), "feas_commissions_" + std::to_string(i));
+    feas->SetCoefficient(path_flow_vars[i], 1.0);
+    feas->SetBounds(commissions_sum, solver->infinity());
 }
 objective->SetMaximization();
 
@@ -725,6 +785,7 @@ endif()
 - [Exchange Rates Manager PRD](03-exchange-rates-manager.md)
 - [OR-Tools Documentation](https://developers.google.com/optimization)
 - [Existing Topology Collection Implementation](../../../src/core/transactions/transactions/max_flow_calculation/)
+- [Topology Collection Protocol](../../architecture/vtcpd/protocols/topology-collection-protocol.md)
 
 ### Detailed Component Specifications
 
@@ -830,6 +891,18 @@ All existing max flow calculation message classes gain:
 **Target-side transactions** (`MaxFlowCalculationTargetFstLevelTransaction`, `MaxFlowCalculationTargetSndLevelTransaction`):
 - **Exchange Rate Logic**: When `exchangeEquivalents` non-empty, search local `ExchangeRatesManager` for rates matching pairs `exchangeEquivalents[i]/mEquivalent` 
 - **Response**: Send found rates via `ExchangeRatesMessage` alongside topology data
+
+#### Additional Topology Sending Enhancement (Discovered During Implementation)
+
+**Source-side enhanced topology sending** (`MaxFlowCalculationSourceFstLevelTransaction`, `MaxFlowCalculationSourceSndLevelTransaction`):
+- **Enhanced Logic**: If current node has exchange rates from `mEquivalent` to any `exchangeEquiv`, send additional topology for payer in each `exchangeEquiv`
+- **Implementation**: Send separate topology messages (`ResultMaxFlowCalculationMessage`, `ResultMaxFlowCalculationGatewayMessage`) for each `exchangeEquiv` where exchange rate from `mEquivalent` exists
+- **Refactoring Requirement**: Extract topology sending logic into separate method callable for each required equivalent
+
+**Target-side enhanced topology sending** (`MaxFlowCalculationTargetFstLevelTransaction`, `MaxFlowCalculationTargetSndLevelTransaction`):  
+- **Enhanced Logic**: If current node has exchange rates from any `exchangeEquiv` to `mEquivalent`, send additional topology for payer in each `exchangeEquiv`
+- **Implementation**: Send separate topology messages (`ResultMaxFlowCalculationMessage`, `ResultMaxFlowCalculationGatewayMessage`) for each `exchangeEquiv` where exchange rate to `mEquivalent` exists
+- **Refactoring Requirement**: Extract topology sending logic into separate method callable for each required equivalent
 
 **Legacy transactions** (`CollectTopologyTransaction`, `InitiateMaxFlowCalculationTransaction`, `ReceiveMaxFlowCalculationOnTargetTransaction`):
 - **Compatibility**: Always pass empty `exchangeEquivalents` vector in outgoing messages
