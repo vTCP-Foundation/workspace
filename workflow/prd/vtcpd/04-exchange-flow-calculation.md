@@ -307,6 +307,8 @@ This iteration establishes the foundation for:
 - **Notes**:
   - Fixed, per-transit fee independent of payment amount.
   - Included in topology result messages only when `amount > 0` is configured on the sending node.
+  - Applied exclusively when the node plays a transit role on the current path segment (no exchange executed at that node on that path).
+  - Deducted at most once per `(ContractorID, SerializedEquivalent)` while assembling the ordered set of optimal paths; subsequent paths that reuse the same transit node skip additional deductions.
 
 ##### CommissionsManager
 - **Purpose**: Store per-equivalent commissions for the local node; read from `conf.json` on startup
@@ -316,6 +318,26 @@ This iteration establishes the foundation for:
   - `TrustLineAmount applyCommission(const TrustLineAmount &in)` — subtracts fixed fee; clamps to zero
 - **Constants**:
   - `kCommissionsTTLSeconds = 300` (used for payer-side cached entries; node config-based commissions do not expire)
+
+##### TransitCommissionEvent
+- **Purpose**: Describe a single transit commission deduction applied while materializing an optimal path
+- **Fields**:
+  - `ContractorID contractor`: Node where deduction occurred
+  - `SerializedEquivalent equivalent`: Equivalent in which the commission is defined
+  - `TrustLineAmount commission`: Fixed amount charged for this path
+  - `TrustLineAmount flow_after`: Flow remaining on the path immediately after deduction
+- **Notes**:
+  - Generated only when a path consumes a commission that has not yet been charged for the `(contractor, equivalent)` pair in the ordered path set.
+  - Drives logging (`C(...)`) and downstream analytics.
+
+##### TransitCommissionRegistry (Helper)
+- **Purpose**: Runtime helper that guarantees “charge once” semantics for transit commissions across the ordered optimal path list
+- **Key Responsibilities**:
+  - Maintain `unordered_set<(ContractorID, SerializedEquivalent)>` of already-charged commissions
+  - Expose `double consumeForPath(const ExchangePath&, double raw_flow)` that subtracts the commission amount only the first time a `(contractor, equivalent)` pair appears while also producing `TransitCommissionEvent` entries
+  - Provide readonly access to generated `TransitCommissionEvent` objects so that `OptimalPathResult` can embed them for logging and analytics
+- **Notes**:
+  - Commission deduction occurs before computing `received_amount` to keep solver objective consistent with post-processing results.
 
 ##### ExchangeRate (per `src/core/rates/ExchangeRate.h`)
 - **Fields**:
@@ -460,9 +482,10 @@ MPSolver::ResultStatus result_status = solver->Solve();
 1. **Path Enumeration Phase**: Pre-compute all feasible paths during LP setup
 2. **Path Variable Creation**: One variable per enumerated path with capacity constraints
 3. **Exchange Rate + Commissions Integration**:
-   - Compute cumulative fixed commissions for the path: `C_path = Σ c(node_k, equiv_k)` over transited nodes in the path’s equivalents
+   - Compute per-path transit commission: `C_path = Σ c(node_k, equiv_k)` considering only nodes that act purely as transit for that concrete path (exchange hops do not contribute).
    - Define `effective_flow_path = max(0, flow_var - C_path)`
    - Objective coefficient reflects `effective_flow_path × effective_exchange_rate`
+   - Global “pay once” semantics are enforced during solution interpretation by tracking which `(ContractorID, SerializedEquivalent)` commissions already consumed while iterating ordered optimal paths.
 4. **Direct Path Results**: Solution variables directly map to path flows without decomposition
 
 **Path Enumeration Algorithm**:
@@ -526,7 +549,7 @@ for (const auto& path : feasible_paths) {
 MPObjective* objective = solver->MutableObjective();
 for (size_t i = 0; i < feasible_paths.size(); i++) {
     double effective_rate = feasible_paths[i].calculateEffectiveExchangeRate();
-    double commissions_sum = feasible_paths[i].sumFixedCommissions(); // sum of fixed fees along path
+    double commissions_sum = feasible_paths[i].sumTransitCommissions(); // sum of transit-only fixed fees for this path
     // Model: max(0, f - C) * rate. One practical linearization for f ≥ 0:
     // If f ≤ C, the solver will push f to 0 due to no positive contribution.
     // Otherwise, coefficient can be applied to f, and feasibility constraints ensure f ≥ C for any positive contribution.
@@ -569,26 +592,39 @@ if (status == MPSolver::OPTIMAL) {
 // Container for storing optimal path results for future use
 vector<OptimalPathResult> optimal_paths;
 
+// Determine deterministic ordering: highest effective rate first, then fewer nodes
+vector<size_t> ordered_indices = orderPathsForOutput(feasible_paths);
+
+// Keep track of commissions already charged across paths
+TransitCommissionRegistry commission_registry;
+
 // Extract optimal flows and build comprehensive path information
-for (size_t i = 0; i < feasible_paths.size(); i++) {
-    double optimal_flow = path_flow_vars[i]->solution_value();
-    
-    if (optimal_flow > 1e-6) {  // Ignore negligible flows
-        const auto& path = feasible_paths[i];
-        double received_amount = optimal_flow * path.calculateEffectiveExchangeRate();
-        
-        // Store detailed path result for future analytics
-        OptimalPathResult path_result;
-        path_result.path = path;
-        path_result.optimal_flow = TrustLineAmount(optimal_flow);
-        path_result.received_amount = TrustLineAmount(received_amount);
-        path_result.effective_exchange_rate = path.calculateEffectiveExchangeRate();
-        path_result.path_efficiency = received_amount / optimal_flow;
-        optimal_paths.push_back(path_result);
-        
-        // Log with complete path information
-        info() << "Optimal flow path: " << formatDetailedPath(path_result);
+for (auto index : ordered_indices) {
+    double optimal_flow = path_flow_vars[index]->solution_value();
+    if (optimal_flow <= 1e-6) {
+        continue; // Ignore negligible flows
     }
+
+    const auto& path = feasible_paths[index];
+    double flow_after_commission = commission_registry.consumeForPath(path, optimal_flow);
+    if (flow_after_commission <= 1e-6) {
+        continue; // Entire flow eaten by commission or commission already charged on previous path
+    }
+
+    double received_amount = flow_after_commission * path.calculateEffectiveExchangeRate();
+
+    // Store detailed path result for future analytics
+    OptimalPathResult path_result;
+    path_result.path = path;
+    path_result.raw_flow = TrustLineAmount(optimal_flow);
+    path_result.flow_after_commission = TrustLineAmount(flow_after_commission);
+    path_result.received_amount = TrustLineAmount(received_amount);
+    path_result.effective_exchange_rate = path.calculateEffectiveExchangeRate();
+    path_result.path_efficiency = received_amount / flow_after_commission;
+    optimal_paths.push_back(path_result);
+
+    // Log with complete path information, including commission events
+    info() << "Optimal flow path: " << formatDetailedPath(path_result);
 }
 
 // Store optimal paths for potential future use (caching, analytics, alternative solutions)
@@ -598,6 +634,11 @@ info() << "Total optimal receivable amount for contractor " << contractorID
        << ": " << objective->Value() << " in equivalent " << mEquivalent
        << " achieved through " << optimal_paths.size() << " paths";
 ```
+
+Where:
+- `orderPathsForOutput` sorts by effective exchange rate (descending) and, when equal, by fewer nodes first to prioritize less complex routes.
+- `TransitCommissionRegistry` ensures each transit commission configured on a node is deducted only once across the ordered list of paths.
+- `formatDetailedPath` uses `path_result.commission_events` to render explicit commission entries in the log output.
 
 **Step 5: Error Handling**
 ```cpp
@@ -617,15 +658,46 @@ switch (status) {
 }
 ```
 
+#### Commission Application Example
+Topology sample (equivalent `2002`):
+- Nodes: `A`, `B`, `C`, `D`, `E`, `F`
+- Capacities:
+  - `A -> B`: 1000
+  - `B -> F`: 500
+  - `B -> C`: 800
+  - `C -> F`: 200
+  - `B -> D`: 700
+  - `D -> E`: 300
+  - `E -> F`: 900
+- Commission configured on node `B` for equivalent `2002`: 10
+
+The solver discovers three feasible paths with raw cumulative capacity of 1000. After ordering by effective exchange rate (identical in this case) and then by hop count, the paths appear as:
+1. `A -> B -> F` (2 hops)
+2. `A -> B -> C -> F` (3 hops)
+3. `A -> B -> D -> E -> F` (4 hops)
+
+`TransitCommissionRegistry` charges the commission on the first path only because node `B` acts as a transit node there and the `(B, 2002)` pair has not been charged before. When paths two and three are processed, the registry detects that the commission has already been applied and no further deduction takes place.
+
+Resulting path log output:
+```
+F(nodes: [A -> B]; ids [0 -> 2]; flow: 510; eq: 2002) -> C(node: B; id: 2; commission: 10; flow after: 500; eq: 2002) -> F(nodes: [B -> F]; ids [2 -> 1]; flow: 500; eq: 2002)
+F(nodes: [A -> B]; ids [0 -> 2]; flow: 200; eq: 2002) -> F(nodes: [B -> C]; ids [2 -> 4]; flow: 200; eq: 2002) -> F(nodes: [C -> F]; ids [4 -> 1]; flow: 200; eq: 2002)
+F(nodes: [A -> B]; ids [0 -> 2]; flow: 290; eq: 2002) -> F(nodes: [B -> D]; ids [2 -> 5]; flow: 290; eq: 2002) -> F(nodes: [D -> E]; ids [5 -> 3]; flow: 290; eq: 2002) -> F(nodes: [E -> F]; ids [3 -> 1]; flow: 290; eq: 2002)
+```
+
+Summing the delivered flow (`500 + 200 + 290`) yields the expected maximum receivable amount of `990`.
+
 #### Path Logging Format Specification
 **Format**: Each path logged as single line with detailed node and flow information:
 - **Flow Element (F)**: `F(nodes: [address1 -> address2]; ids [id1 -> id2]; flow: amount; eq: equivalent)`
 - **Exchange Element (E)**: `E(node: address; id: nodeId; eqs [fromEq->toEq]; flows:[inputFlow->outputFlow])`
+- **Commission Element (C)**: `C(node: address; id: nodeId; commission: amount; flow after: amount; eq: equivalent)`
 - **Path Separator**: ` -> ` (space-arrow-space)
 
 **Examples**:
 ```
-Flow path: F(nodes: [127.0.0.1:2002 -> 127.0.0.1:2003]; ids [0 -> 1]; flow: 100; eq: 1) -> F(nodes: [127.0.0.1:2003 -> 127.0.0.1:2004]; ids [1 -> 2]; flow: 100; eq: 1) -> E(node: 127.0.0.1:2004; id:2; eqs [1->2]; flows:[100->85]) -> F(nodes:[127.0.0.1:2004->127.0.0.1:2005]; ids:[2->3]; flow:85; eq:2)
+Flow path with exchange: F(nodes: [127.0.0.1:2002 -> 127.0.0.1:2003]; ids [0 -> 1]; flow: 100; eq: 1) -> F(nodes: [127.0.0.1:2003 -> 127.0.0.1:2004]; ids [1 -> 2]; flow: 100; eq: 1) -> E(node: 127.0.0.1:2004; id:2; eqs [1->2]; flows:[100->85]) -> F(nodes:[127.0.0.1:2004->127.0.0.1:2005]; ids:[2->3]; flow:85; eq:2)
+Flow path with transit commission: F(nodes: [A -> B]; ids [0 -> 2]; flow: 510; eq: 2002) -> C(node: B; id: 2; commission: 10; flow after: 500; eq: 2002) -> F(nodes: [B -> F]; ids [2 -> 1]; flow: 500; eq: 2002)
 ```
 
 Where:
@@ -639,6 +711,13 @@ Where:
   - `id`: ContractorID of exchange node
   - `eqs`: Exchange direction (fromEquivalent->toEquivalent)
   - `flows`: Flow transformation (inputAmount->outputAmount)
+- **C (Commission)**: Represents transit commission application on a path
+  - `node`: IP address (or alias) of the node that charged the commission
+  - `id`: ContractorID of the node
+  - `commission`: Fixed commission amount deducted on this path
+  - `flow after`: Resulting flow immediately after commission deduction
+  - `eq`: Equivalent in which the commission is defined
+  - Emitted at most once per `(ContractorID, equivalent)` across the entire ordered set of logged paths.
 
 #### CMake Integration Pattern
 ```cmake
@@ -863,11 +942,13 @@ endif()
 - **Purpose**: Comprehensive storage of optimal path solution information for future analytics
 - **Fields**:
   - `ExchangePath path`: Complete path details (nodes, equivalents, exchange points)
-  - `TrustLineAmount optimal_flow`: LP-optimized flow through this path
+  - `TrustLineAmount raw_flow`: LP solution value before commission adjustments
+  - `TrustLineAmount flow_after_commission`: Flow remaining after applying transit commissions with deduplication
   - `TrustLineAmount received_amount`: Amount received at target after exchanges
   - `double effective_exchange_rate`: End-to-end exchange rate for this path
-  - `double path_efficiency`: Ratio of received/sent (higher = better path)
+  - `double path_efficiency`: Ratio of received/sent (higher = better path) computed using `flow_after_commission`
   - `vector<ExchangeStep> exchange_steps`: Detailed exchange information per node
+  - `vector<TransitCommissionEvent> commission_events`: Ordered commission deductions applied to this path (empty when no commissions consumed on this path)
 - **Usage**: Enable path-based analytics, alternative solution discovery, sensitivity analysis
 
 #### Enhanced Existing Classes

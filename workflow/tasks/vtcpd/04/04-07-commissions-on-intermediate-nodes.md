@@ -5,12 +5,15 @@
 - [Topology Collection Protocol](../../../architecture/vtcpd/protocols/topology-collection-protocol.md)
 
 # Description
-Introduce fixed per-node commissions during topology collection and max-flow/LP calculation for exchange-enabled flows. Each node may define a fixed commission per equivalent in `conf.json`. Nodes include their commission (for the specific equivalent of the topology snapshot) in topology result messages. The payer (S) caches received commissions with TTL and uses them in flow computation.
+Introduce fixed per-node commissions during topology collection and max-flow/LP calculation for exchange-enabled flows. Each node may define a fixed commission per equivalent in `conf.json`. Nodes include their commission (for the specific equivalent of the topology snapshot) in topology result messages. The payer (S) caches received commissions with TTL and uses them in flow computation. Commissions apply only when a node acts as a transit hop on the chosen path and each `(ContractorID, SerializedEquivalent)` commission is charged at most once across the ordered optimal path set.
 
 # Requirements and DOD
 - Commission definition:
-  - Fixed fee per transit, independent of payment amount.
+  - Fixed fee per transit hop (node acts strictly as a relay in the path, no exchange executed), independent of payment amount.
   - Represented by `Commission { amount: uint64 }` per `SerializedEquivalent`.
+- Commission application semantics:
+  - For a given `(ContractorID, SerializedEquivalent)` pair, the fee is deducted at most once across the sorted optimal path list produced by the solver.
+  - Deduction order: paths sorted by effective exchange rate (descending) and hop count (ascending) consume commissions first.
 - New manager:
   - `CommissionsManager` holds `map<SerializedEquivalent, Commission>`.
   - Reads from `conf.json` on node startup.
@@ -29,14 +32,13 @@ Introduce fixed per-node commissions during topology collection and max-flow/LP 
   - Add TTL cleanup for commissions mirroring `ExchangeRatesManager`’s cleanup of `mExchangeRates`/`mExternalExchangeRates` (remove expired entries; compute nearest expiration to schedule cleanup).
   - TTL constant: `kCommissionsTTLSeconds = 300` in `TopologyTrustLinesManager`.
 - OR-Tools integration impact:
-  - Incorporate fixed per-hop commission when modeling capacities/effective flow:
-    - Effective deliverable on an arc that passes through a node with commission `c` reduces by `c` once per traversal of that node.
-    - Path-based LP: adjust path objective/constraints to account for the sum of commissions along the path (payer+receiver side and bridge segments as traversed).
-  - Maintain feasibility by clamping when cumulative commissions exceed available path capacity.
+  - Incorporate fixed per-hop commission only for nodes that act as transit on the enumerated path.
+  - Path-based LP: compute per-path transit commission `C_path` but rely on a post-solution registry to ensure each `(ContractorID, SerializedEquivalent)` fee is charged once across all selected paths.
+  - Maintain feasibility by clamping when `C_path` exceeds available path capacity (path contributes zero flow in that case).
 - Config:
   - Use existing `conf.json` to define per-equivalent commissions for the local node. Exact schema to be finalized with Architect; examples included in PRD.
 - Documentation:
-  - Update PRD and topology protocol docs to reflect commission behavior, messaging, storage, and TTL.
+  - Update PRD and topology protocol docs to reflect commission behavior, messaging, storage, TTL, and logging (`C(...)` entries in path output).
 
 - Unit tests:
   - Implement unit tests for `CommissionsManager`, covering the commission application method with multiple scenarios, including edge cases.
@@ -53,15 +55,17 @@ Definition of Done:
 3. Update the four topology transactions to attach commission when present on node.
 4. Extend `TopologyTrustLinesManager` with commissions cache map and TTL cleanup logic analogous to `ExchangeRatesManager` external rates cleanup.
 5. On sender (S), store commissions only when `amount > 0` and apply TTL refresh semantics.
-6. Update OR-Tools LP integration (path-based model) to subtract cumulative fixed commissions along each feasible path when computing objective and feasibility.
-7. Update PRD and protocol documentation; provide config examples in PRD.
-8. Provide a small demo plan (log-driven) to verify commission propagation and TTL cleanup.
+6. Implement runtime helper (e.g., `TransitCommissionRegistry`) that tracks charged commissions across ordered paths and produces `TransitCommissionEvent` metadata for logging/analytics.
+7. Update OR-Tools LP integration (path-based model) to subtract per-path transit commissions and cooperate with the registry for “charge once” semantics.
+8. Update PRD and protocol documentation; provide config examples in PRD.
+9. Provide a small demo plan (log-driven) to verify commission propagation, TTL cleanup, and single-charge behavior.
 
 # Test Plan
 - Unit-level (design-level) scenarios:
   - `CommissionsManager::applyCommission` clamps to zero when `amount < fee`.
   - `TopologyTrustLinesManager` commissions map: insert, refresh, TTL expiry and cleanup.
   - Message serialization/deserialization includes optional commission when present.
+  - Commission registry/unit ensures single deduction per `(ContractorID, equivalent)` across multiple optimal paths.
 
   - `CommissionsManager` unit tests (explicit cases):
     - No commission for equivalent: input amount returns unchanged.
@@ -73,9 +77,10 @@ Definition of Done:
   - Nodes with configured commission send it in result messages for the specific equivalent.
   - Payer (S) receives and caches commission only when `amount > 0` and refreshes TTL on update.
   - TTL cleanup removes expired entries without affecting active ones.
+  - Multiple optimal paths using the same transit node verify that commission is charged on the first logged path only.
 - OR-Tools modeling (logic verification):
   - For a simple path S→X→R with single commission `c` at X, verify optimal path result equals `min(capacities) - c` (clamped at zero) in target equivalent (ignoring exchange rate for the scenario).
-  - Multi-hop path cumulative commissions reduce effective objective contribution accordingly.
+  - Multi-hop path cumulative commissions reduce effective objective contribution accordingly, except for repeated transit nodes where the registry prevents double-deduction.
 
 # Verification and Validation
 <Architect approval that validation criteria appropriate to task complexity have been met>

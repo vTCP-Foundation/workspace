@@ -11,7 +11,9 @@ Integrate OR-Tools (LinearSolver), build an LP model per PRD with a path-based a
 - Node startup verification: check OR-Tools availability and minimum version (>= 9.0), terminate with error if unavailable or insufficient version.
 - LP solver: create `MPSolver` (GLOP or equivalent), path variables, objective, constraints per PRD.
 - Implement stages: path enumeration, LP build, optimization, results stored in `mMaxFlows` and `mOptimalPathResults`.
-- Path logs in the new specified format: F(nodes: [addr1 -> addr2]; ids [id1 -> id2]; flow: amount; eq: equivalent) and E(node: addr; id: nodeId; eqs [fromEq->toEq]; flows:[inputFlow->outputFlow]).
+- Path logs in the new specified format with explicit commission entries: `F(...)`, `E(...)`, and `C(node: …; commission: …; flow after: …; eq: …)`.
+- Deterministic ordering of materialized paths: sort by effective exchange rate (descending) then by hop count (ascending) before logging/applying commissions.
+- Implement runtime helper/registry ensuring each transit commission is charged at most once across the ordered paths and recorded in `OptimalPathResult::commission_events`.
 - Runtime error handling for individual calculation failures.
 - Unit tests for components (enumeration, model build, result interpretation) with mocks.
 - Build and run tests in `build-tests`.
@@ -60,7 +62,7 @@ If any prerequisite above is not yet implemented in the repository, stub/mock th
 3. Implement path enumeration (length cap, pruning non-viable paths).
 4. Build LP: variables per path, objective coefficients = effective rates.
 5. Add full constraints per PRD: capacity per path, exchange min/max limits per step, node balance equalities, sender balance per payer equivalent, non-negativity.
-6. Optimize, collect results, log paths in new format.
+6. Optimize, collect results, apply commission registry, log paths in the extended format (F/E/C).
 7. Handle solver statuses/errors and startup failures.
 
 # Test Plan
@@ -68,7 +70,7 @@ If any prerequisite above is not yet implemented in the repository, stub/mock th
   - Single path, single exchange – validate result.
   - Multiple alternative paths – pick the best.
   - No paths – zero result.
-  - Path logging format validation for F and E elements.
+  - Path logging format validation for F, E, and C elements (commission appears once when expected).
   - Startup verification tests (mock OR-Tools availability/version checks).
 - Execute in `build-tests`.
 
@@ -81,9 +83,9 @@ Additional unit tests aligning with PRD (implement here if in scope; otherwise e
 ## LP model details (reference)
 - Solver creation: `MPSolver::CreateSolver("GLOP")`; throw runtime error if unavailable.
 - Path enumeration yields `vector<ExchangePath>`; create one variable per path with upper bound = path min capacity.
-- Objective: maximize Σ(flow_path_i × effective_exchange_rate_i).
+- Objective: maximize Σ(flow_after_commission_path_i × effective_exchange_rate_i), where `flow_after_commission_path_i = max(0, flow_path_i - C_path_i)`.
 - Constraints: see full list above; sender balance constraints are created per payer equivalent and include coefficients only for paths starting in that equivalent.
-- Solution extraction: for each path variable `x_i`, if `x_i.solution_value() > ε`, compute received amount = `x_i * effective_rate_i` and persist in `mOptimalPathResults`.
+- Solution extraction: for each path variable `x_i`, if `x_i.solution_value() > ε`, order paths, apply the commission registry to obtain `flow_after_commission`, compute received amount = `flow_after_commission * effective_rate_i`, and persist both raw/adjusted values plus commission events in `mOptimalPathResults`.
 
 ## CMake integration pattern (reference)
 ```cmake
