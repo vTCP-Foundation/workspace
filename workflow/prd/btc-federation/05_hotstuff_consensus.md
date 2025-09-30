@@ -9,23 +9,23 @@
 - **Status**: Draft
 
 - **Related Documents**:
-   - [BTC Federation](/architecture/common/entities/btc_federation.md)
-   - [ADR-005 HotStuff Consensus Protocol](/architecture/btc-federation/adrs/ADR-005-hotstuff-consensus-protocol.md)
-   - [C4 Level 1](/architecture/btc-federation/c4-level1/c1.mermaid)
-   - [C4 Level 2](/architecture/btc-federation/c4-level2/c2.mermaid)
-   - [C4 Level 3](/architecture/btc-federation/c4-level3/c3.mermaid)
-   - [C4 Level 4](/architecture/btc-federation/c4-level4/c4-consensus-engine.mermaid)
+   - [BTC Federation](/architecture/common/entities/federation_btc.md)
+   - [ADR-005 HotStuff Consensus Protocol](/architecture/federation/adrs/ADR-005-hotstuff-consensus-protocol.md)
+   - [C4 Level 1](/architecture/federation/c4-level1/c1.mermaid)
+   - [C4 Level 2](/architecture/federation/c4-level2/c2.mermaid)
+   - [C4 Level 3](/architecture/federation/c4-level3/c3.mermaid)
+   - [C4 Level 4](/architecture/federation/c4-level4/c4-consensus-engine.mermaid)
 
 ## Executive Summary
 This document outlines the plan for implementing the HotStuff consensus protocol for the BTC Federation. The primary objective of this iteration is to deliver a robust and well-tested standalone implementation of the consensus engine, operating within a simulated environment. This work is a critical step towards achieving Byzantine Fault Tolerance, a cornerstone of the federation's security and reliability.
 
-**Objective**: Implement HotStuff protocol as a standalone consensus engine [(ADR-005)](/architecture/btc-federation/adrs/ADR-005-hotstuff-consensus-protocol.md).
+**Objective**: Implement HotStuff protocol as a standalone consensus engine [(ADR-005)](/architecture/federation/adrs/ADR-005-hotstuff-consensus-protocol.md).
 
 **Key Deliverables**:
 
 ### 1. Core Implementation
 - **HotStuff Consensus Engine**: Standalone implementation of the HotStuff protocol with clear interfaces for network and database dependencies
-  - *Acceptance Criteria*: Protocol implementation passes automated verification against [HotStuff Data Flow](/architecture/btc-federation/protocols/hot-stuff-consensus/data-flow.mermaid) specification with 100% message flow compliance and state transition validation
+  - *Acceptance Criteria*: Protocol implementation passes automated verification against [HotStuff Data Flow](/architecture/federation/protocols/hot-stuff-consensus/data-flow.mermaid) specification with 100% message flow compliance and state transition validation
 - **Cryptographic Abstraction Layer**: Message signing implemented as interface with mock implementations for testing
   - *Acceptance Criteria*: Clean signature interface abstraction, default mock signers for unit/integration tests, no hard dependencies on specific cryptographic libraries
  
@@ -56,12 +56,12 @@ This document outlines the plan for implementing the HotStuff consensus protocol
 ## Iteration Context
 ### Previous Iterations Summary
 - **Completed Features**: Foundational architectural work for HotStuff consensus:
-  - **Protocol Analysis**: Comprehensive HotStuff protocol study with [data flow diagram](/architecture/btc-federation/protocols/hot-stuff-consensus/data-flow.mermaid)
+  - **Protocol Analysis**: Comprehensive HotStuff protocol study with [data flow diagram](/architecture/federation/protocols/hot-stuff-consensus/data-flow.mermaid)
   - **System Architecture**: Complete C4 documentation:
-    - **C1 (System Context)**: High-level boundaries ([c1.mermaid](/architecture/btc-federation/c4-level1/c1.mermaid))
-    - **C2 (Container Level)**: Node components ([c2.mermaid](/architecture/btc-federation/c4-level2/c2.mermaid))
-    - **C3 (Component Level)**: Internal architecture ([c3.mermaid](/architecture/btc-federation/c4-level3/c3.mermaid))
-    - **C4 (Code Level)**: Consensus engine details ([c4-consensus-engine.mermaid](/architecture/btc-federation/c4-level4/c4-consensus-engine.mermaid))
+    - **C1 (System Context)**: High-level boundaries ([c1.mermaid](/architecture/federation/c4-level1/c1.mermaid))
+    - **C2 (Container Level)**: Node components ([c2.mermaid](/architecture/federation/c4-level2/c2.mermaid))
+    - **C3 (Component Level)**: Internal architecture ([c3.mermaid](/architecture/federation/c4-level3/c3.mermaid))
+    - **C4 (Code Level)**: Consensus engine details ([c4-consensus-engine.mermaid](/architecture/federation/c4-level4/c4-consensus-engine.mermaid))
 
 - **Lessons Learned**: 
   - **Modular Design**: Enables independent testing and extensibility
@@ -353,9 +353,9 @@ This category of tests is designed to ensure the system's resilience to failures
 ## Appendices
 ### References
 - Related documents: 
-  - [ADR-005 HotStuff Consensus Protocol](/architecture/btc-federation/adrs/ADR-005-hotstuff-consensus-protocol.md)
-  - [BTC Federation Entity Definition](/architecture/common/entities/btc_federation.md)
-  - [C4 Architecture Diagrams](/architecture/btc-federation/c4-level1/c1.mermaid)
+  - [ADR-005 HotStuff Consensus Protocol](/architecture/federation/adrs/ADR-005-hotstuff-consensus-protocol.md)
+  - [BTC Federation Entity Definition](/architecture/common/entities/federation_btc.md)
+  - [C4 Architecture Diagrams](/architecture/federation/c4-level1/c1.mermaid)
 - External resources:
   - [HotStuff: BFT Consensus with Linearity and Responsiveness](https://arxiv.org/abs/1803.05069) - Original HotStuff paper
   - [LibraBFT: State Machine Replication in the Libra Blockchain](https://developers.diem.com/papers/diem-consensus-state-machine-replication-in-the-diem-blockchain/2019-06-28.pdf)
@@ -377,5 +377,5 @@ API specifications will be generated during implementation and documented in:
 **Related Documents**
 - **Master Project Vision**: BTC Federation - Decentralized Bitcoin asset management system
 - **Previous Iteration PRD**: [Previous consensus-related work - architectural planning phase]
-- **Technical Architecture**: [C4 Level 1-4 diagrams](/architecture/btc-federation/c4-level1/c1.mermaid)
+- **Technical Architecture**: [C4 Level 1-4 diagrams](/architecture/federation/c4-level1/c1.mermaid)
 - **User Research**: Federation member requirements for Byzantine fault tolerance and consensus participation

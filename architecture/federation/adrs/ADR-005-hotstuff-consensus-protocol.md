@@ -10,10 +10,10 @@ Accepted
 Dima Chizhevsky, Mykola Ilashchuk
 
 ## Context
-The BTC Federation requires a Byzantine Fault Tolerant (BFT) consensus protocol to coordinate a large-scale federation of up to 512 participants [(PRD-03)](/workflow/prd/btc-federation/03_musig2_frost_comparative_analysis.md). The choice of BFT consensus emerges directly from Bitcoin L1's security model limitations: _Bitcoin Script provides only basic multisig primitives as cryptographic building blocks_. Since Bitcoin L1 cannot enforce complex consensus rules natively, the federation **must** implement distributed coordination **off-chain** while maintaining cryptographic security guarantees through Bitcoin's multisig mechanism.
+The BTC Federation requires a Byzantine Fault Tolerant (BFT) consensus protocol to coordinate a large-scale federation of up to 512 participants [(PRD-03)](/workflow/prd/federation/03_musig2_frost_comparative_analysis.md). The choice of BFT consensus emerges directly from Bitcoin L1's security model limitations: _Bitcoin Script provides only basic multisig primitives as cryptographic building blocks_. Since Bitcoin L1 cannot enforce complex consensus rules natively, the federation **must** implement distributed coordination **off-chain** while maintaining cryptographic security guarantees through Bitcoin's multisig mechanism.
 
 ### Requirements
-- Byzantine Fault Tolerant consensus for up to 512 participants [(PRD-03)](/workflow/prd/btc-federation/03_musig2_frost_comparative_analysis.md)
+- Byzantine Fault Tolerant consensus for up to 512 participants [(PRD-03)](/workflow/prd/federation/03_musig2_frost_comparative_analysis.md)
     - Robust consensus protocol to synchronize operations between federation participants
     - Scalable consensus suitable for large federation sizes
     - Deterministic finality for coordination of federation operations
@@ -25,9 +25,9 @@ The Bitcoin L1 chain provides only multisigs as crypto primitives for distribute
 - **Forced Correspondence**: The BFT consensus must align with Bitcoin's signature-based security model
 
 ### Federation Architecture Context
-Based on the analysis in [PRD-03 MuSig2 vs FROST Comparative Analysis](/workflow/prd/btc-federation/03_musig2_frost_comparative_analysis.md):
-- **Target Size**: 512 participants federation (max) [(PRD-03)](/workflow/prd/btc-federation/03_musig2_frost_comparative_analysis.md)
-- **Signature Scheme**: **SPHINCS+** for Federation Participants Voting [(ADR-4)](architecture/btc-federation/adrs/ADR-004-sphincs-signature-scheme.md) 
+Based on the analysis in [PRD-03 MuSig2 vs FROST Comparative Analysis](/workflow/prd/federation/03_musig2_frost_comparative_analysis.md):
+- **Target Size**: 512 participants federation (max) [(PRD-03)](/workflow/prd/federation/03_musig2_frost_comparative_analysis.md)
+- **Signature Scheme**: **SPHINCS+** for Federation Participants Voting [(ADR-4)](architecture/federation/adrs/ADR-004-sphincs-signature-scheme.md) 
 - **Security Model**: BFT consensus is acceptable because vote validation is enforced by Bitcoin L1's multisig requirements
 
 ### Alternative Considerations
@@ -38,7 +38,7 @@ Other consensus protocols considered:
 
 ### HotStuff Protocol Reference
 - **Academic Paper**: [HotStuff: BFT Consensus with Linearity and Responsiveness](https://arxiv.org/abs/1803.05069) (PODC 2019)
-- **HotStuff Data Flow**: [HotStuff Data Flow](/architecture/btc-federation/protocols/hot-stuff-consensus/data-flow.mermaid)
+- **HotStuff Data Flow**: [HotStuff Data Flow](/architecture/federation/protocols/hot-stuff-consensus/data-flow.mermaid)
 
 ## Decision
 We have decided to adopt **HotStuff** as our Byzantine Fault Tolerant consensus protocol for the BTC Federation.
@@ -93,8 +93,8 @@ We have decided to adopt **HotStuff** as our Byzantine Fault Tolerant consensus 
 ## Implementation Requirements
 
 ### Integration Points
-- **P2P Network**: Integration with federation P2P networking layer from [PRD-02 P2P Network Stack](/workflow/prd/btc-federation/02_p2p_network_stack.md)
-- **Monitoring**: Integration with logging system from [PRD-04 Logging System](/workflow/prd/btc-federation/04_logging_system_implementation.md)
+- **P2P Network**: Integration with federation P2P networking layer from [PRD-02 P2P Network Stack](/workflow/prd/federation/02_p2p_network_stack.md)
+- **Monitoring**: Integration with logging system from [PRD-04 Logging System](/workflow/prd/federation/04_logging_system_implementation.md)
 
 ### Performance Targets
 - **Consensus Latency**: Target 3-10 seconds for finality in 512 participant federation
@@ -103,6 +103,6 @@ We have decided to adopt **HotStuff** as our Byzantine Fault Tolerant consensus 
 - **Availability**: >99% uptime with >2/3 participant availability
 
 ## References
-- **FROST Analysis**: [PRD-03 MuSig2 vs FROST Comparative Analysis](/workflow/prd/btc-federation/03_musig2_frost_comparative_analysis.md)
+- **FROST Analysis**: [PRD-03 MuSig2 vs FROST Comparative Analysis](/workflow/prd/federation/03_musig2_frost_comparative_analysis.md)
 - **Bitcoin Security Model**: BIP-340 (Schnorr Signatures), BIP-341 (Taproot)
-- **Related Architecture**: [BTC Federation Entity](/architecture/common/entities/btc_federation.md)
+- **Related Architecture**: [BTC Federation Entity](/architecture/common/entities/federation_btc.md)

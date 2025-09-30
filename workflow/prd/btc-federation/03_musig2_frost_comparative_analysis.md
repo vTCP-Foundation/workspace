@@ -119,7 +119,7 @@ This PRD is complete when the following deliverables are produced:
 
 ## Task List
 
-Reference to the task list file for this PRD: `workspace/workflow/tasks/btc-federation/03/tasks.md`
+Reference to the task list file for this PRD: `workspace/workflow/tasks/federation/03/tasks.md`
 
 ---
 

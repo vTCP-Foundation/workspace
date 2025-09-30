@@ -171,7 +171,7 @@ peers:
 - All other performance and functionality requirements unchanged
 - Enhanced stability and compatibility across diverse network environments
 
-See [ADR-002: Transport Protocol Selection](../../../workspace/architecture/btc-federation/ADR-002-transport-protocol-selection.md) for detailed decision rationale.
+See [ADR-002: Transport Protocol Selection](../../../workspace/architecture/federation/ADR-002-transport-protocol-selection.md) for detailed decision rationale.
 
 #### Data Storage
 - yaml file for peers storage
@@ -406,5 +406,5 @@ Each success criterion requires specific validation approaches:
 **Related Documents**
 - **Master Project Vision**: n/a
 - **Previous Iteration PRD**: n/a
-- **Technical Architecture**: [ADR-001](../../../workspace/architecture/btc-federation/ADR-001-network-architecture-design.md), [ADR-002](../../../workspace/architecture/btc-federation/ADR-002-transport-protocol-selection.md), [ADR-003](../../../workspace/architecture/btc-federation/ADR-003-interface-design-integration.md)
+- **Technical Architecture**: [ADR-001](../../../workspace/architecture/federation/ADR-001-network-architecture-design.md), [ADR-002](../../../workspace/architecture/federation/ADR-002-transport-protocol-selection.md), [ADR-003](../../../workspace/architecture/federation/ADR-003-interface-design-integration.md)
 - **User Research**: n/a

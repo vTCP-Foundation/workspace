@@ -7,7 +7,7 @@ _v0.1, 2025-06-30_
 <br>
 
 ## Overview
-This protocol enables the issuance, exchange, and redemption of **BTC-backed** vTCP tokens between the [Bitcoin Network (L1)](/architecture/common/entities/btc_network.md) and [vTCP Network (L2)](/architecture/common/entities/vtcp_network.md).
+This protocol enables the issuance, exchange, and redemption of **BTC-backed** vTCP tokens between the [Bitcoin Network (L1)](/architecture/common/entities/network_btc.md) and [vTCP Network (L2)](/architecture/common/entities/vtcp_network.md).
 
 ## Core Requirements
 
@@ -37,8 +37,8 @@ Beyond the core issuance and redemption flows, the protocol incorporates advance
 - **2. Verifiable Collateral Audits:** The system shall perform regular, automated audits to cryptographically prove that the total supply of the representative token does not exceed the total amount of locked native asset collateral. The audit mechanism must be structured to allow any third party, including individual users, to independently verify the integrity of the system's liabilities.
 
 ## Actors
-- [BTC Federation](/architecture/common/entities/btc_federation.md)
-- The Hub - [vTCP Hub](/architecture/common/entities/vtcp_network_hub.md)
+- [BTC Federation](/architecture/common/entities/federation_btc.md)
+- The Hub - [vTCP Hub](/architecture/common/entities/hub.md)
 - The User - [vTCP Node](/architecture/common/entities/vtcp_network_node.md)
 
 ## System Prerequisites
@@ -97,8 +97,8 @@ This flow enables a user to lock BTC on L1 and receive an equivalent amount of v
 This flow enables a User to cooperatively redeem their vTCP tokens for an equivalent amount of BTC on L1. The process is designed to be fast and efficient. While the Federation treats every redemption request with the same level of security by default (initiating a challenge window), a cooperative redemption uses an "accelerate" mechanism where mutual consent from the User and Hub allows this window to be bypassed, ensuring a rapid settlement.
 
 #### Actors
-- [BTC Federation](/architecture/common/entities/btc_federation.md) - Manages the custody protocol and L1 funds.
-- The Hub - [vTCP Hub](/architecture/common/entities/vtcp_network_hub.md) - The User's L2 counterparty.
+- [BTC Federation](/architecture/common/entities/federation_btc.md) - Manages the custody protocol and L1 funds.
+- The Hub - [vTCP Hub](/architecture/common/entities/hub.md) - The User's L2 counterparty.
 - The User - [vTCP Node](/architecture/common/entities/vtcp_network_node.md) - Initiates the redemption.
 
 #### Process Steps
@@ -130,9 +130,9 @@ This flow enables a User to cooperatively redeem their vTCP tokens for an equiva
 This flow serves as a critical security mechanism, allowing a User to unilaterally force the closure of a settlement line if the Hub is unresponsive, malicious, or otherwise uncooperative. This process is intentionally designed as a "nuclear option": it always liquidates the **entire channel balance**, ensuring a clean and final settlement. The Federation acts as a neutral arbiter, making decisions based on cryptographic proof.
 
 #### Actors
-- [BTC Federation](/architecture/common/entities/btc_federation.md) - The arbiter and custodian of L1 funds.
+- [BTC Federation](/architecture/common/entities/federation_btc.md) - The arbiter and custodian of L1 funds.
 - The User - [vTCP Node](/architecture/common/entities/vtcp_network_node.md) - The party initiating the forced redemption.
-- The Hub - [vTCP Hub](/architecture/common/entities/vtcp_network_hub.md) - The unresponsive or disputed counterparty.
+- The Hub - [vTCP Hub](/architecture/common/entities/hub.md) - The unresponsive or disputed counterparty.
 
 #### Process Steps
 
@@ -198,7 +198,7 @@ Channel Rebalancing can only be initiated by a Hub. The process is typically tri
 ### Flow 5: Hub Audit
 
 #### Overview
-The Hub Audit is a supervisory process initiated by the Federation to verify the integrity and solvency of a Hub's operations. The full, detailed process is defined in the [Proof-of-Reserve Audit Protocol](/architecture/btc-federation/protocols/Proof-of-Reserve%20Audit%20Protocol.md).
+The Hub Audit is a supervisory process initiated by the Federation to verify the integrity and solvency of a Hub's operations. The full, detailed process is defined in the [Proof-of-Reserve Audit Protocol](/architecture/federation/protocols/Proof-of-Reserve%20Audit%20Protocol.md).
 
 #### Key Features
 - **Frequency:** Audits are conducted at least **once every 2 hours**, with additional random and event-triggered checks.

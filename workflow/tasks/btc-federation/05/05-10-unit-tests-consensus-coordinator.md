@@ -1,8 +1,8 @@
 # 05-10 - Unit Tests for HotStuffConsensus Coordinator
 
 # Links
-- [PRD](/workflow/prd/btc-federation/05_hotstuff_consensus.md)
-- [Implementation Task 05-02](/workflow/tasks/btc-federation/05/05-02-hotstuff-state-machine.md)
+- [PRD](/workflow/prd/federation/05_hotstuff_consensus.md)
+- [Implementation Task 05-02](/workflow/tasks/federation/05/05-02-hotstuff-state-machine.md)
 
 # Description
 Develop comprehensive unit tests for the HotStuffConsensus coordinator implemented in Task 05-02, focusing on message processing, state coordination, and component integration.

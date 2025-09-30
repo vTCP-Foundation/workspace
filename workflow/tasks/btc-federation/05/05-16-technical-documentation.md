@@ -1,7 +1,7 @@
 # 05-16 - Technical Documentation and API Documentation
 
 # Links
-- [PRD](/workflow/prd/btc-federation/05_hotstuff_consensus.md)
+- [PRD](/workflow/prd/federation/05_hotstuff_consensus.md)
 
 # Description
 Create comprehensive technical documentation for the HotStuff consensus implementation, including architecture overview, API documentation, testing procedures, and troubleshooting guides.

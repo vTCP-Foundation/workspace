@@ -1,9 +1,9 @@
 # 05-04 - Mock Infrastructure Components
 
 # Links
-- [PRD](/workflow/prd/btc-federation/05_hotstuff_consensus.md)
-- [Previous task](/workflow/tasks/btc-federation/05/05-03-abstraction-interfaces.md)
-- [ADR-005 HotStuff Consensus Protocol](/architecture/btc-federation/adrs/ADR-005-hotstuff-consensus-protocol.md)
+- [PRD](/workflow/prd/federation/05_hotstuff_consensus.md)
+- [Previous task](/workflow/tasks/federation/05/05-03-abstraction-interfaces.md)
+- [ADR-005 HotStuff Consensus Protocol](/architecture/federation/adrs/ADR-005-hotstuff-consensus-protocol.md)
 
 # Description
 Implement mock/emulated infrastructure components that satisfy the Network, Storage, and Crypto interfaces defined in Task 05-03. These mocks enable consensus testing without real network, persistence, or cryptographic dependencies.

@@ -1,8 +1,8 @@
 # 05-13 - End-to-End Tests for Basic Consensus Flow
 
 # Links
-- [PRD](/workflow/prd/btc-federation/05_hotstuff_consensus.md)
-- [Implementation Task 05-06](/workflow/tasks/btc-federation/05/05-06-basic-consensus-flow.md)
+- [PRD](/workflow/prd/federation/05_hotstuff_consensus.md)
+- [Implementation Task 05-06](/workflow/tasks/federation/05/05-06-basic-consensus-flow.md)
 
 # Description
 Develop comprehensive end-to-end tests for the basic consensus flow implemented in Task 05-06, focusing on complete consensus rounds, multi-node scenarios, and happy path validation.

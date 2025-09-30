@@ -1,7 +1,7 @@
 # 05-15 - Performance Baselines and Monitoring
 
 # Links
-- [PRD](/workflow/prd/btc-federation/05_hotstuff_consensus.md)
+- [PRD](/workflow/prd/federation/05_hotstuff_consensus.md)
 
 # Description
 Implement performance baseline measurement and monitoring capabilities for the consensus system, establishing metrics for latency, throughput, resource usage, and logging integration.

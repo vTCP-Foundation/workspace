@@ -1,9 +1,9 @@
 # 05-03 - Abstraction Interfaces
 
 # Links
-- [PRD](/workflow/prd/btc-federation/05_hotstuff_consensus.md)
-- [Previous task](/workflow/tasks/btc-federation/05/05-01-consensus-foundation-setup.md)
-- [ADR-005 HotStuff Consensus Protocol](/architecture/btc-federation/adrs/ADR-005-hotstuff-consensus-protocol.md)
+- [PRD](/workflow/prd/federation/05_hotstuff_consensus.md)
+- [Previous task](/workflow/tasks/federation/05/05-01-consensus-foundation-setup.md)
+- [ADR-005 HotStuff Consensus Protocol](/architecture/federation/adrs/ADR-005-hotstuff-consensus-protocol.md)
 
 # Description
 Define clean abstraction interfaces for Network, Storage, and Crypto layers to enable the consensus engine to operate independently of specific implementations. Design interfaces without signature aggregation for future compatibility.

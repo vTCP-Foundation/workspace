@@ -1,9 +1,9 @@
 # 05-11 - Unit Tests for Interfaces and Mock Implementations
 
 # Links
-- [PRD](/workflow/prd/btc-federation/05_hotstuff_consensus.md)
-- [Implementation Task 05-03](/workflow/tasks/btc-federation/05/05-03-abstraction-interfaces.md)
-- [Implementation Task 05-04](/workflow/tasks/btc-federation/05/05-04-mock-infrastructure.md)
+- [PRD](/workflow/prd/federation/05_hotstuff_consensus.md)
+- [Implementation Task 05-03](/workflow/tasks/federation/05/05-03-abstraction-interfaces.md)
+- [Implementation Task 05-04](/workflow/tasks/federation/05/05-04-mock-infrastructure.md)
 
 # Description
 Develop comprehensive unit tests for abstraction interfaces and mock implementations from Tasks 05-03 and 05-04, focusing on interface contracts, mock behavior, and failure injection capabilities.

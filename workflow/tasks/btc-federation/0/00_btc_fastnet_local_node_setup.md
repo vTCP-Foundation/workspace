@@ -1,7 +1,7 @@
 # STARTUP-1 - Bitcoin Fastnet Local Node Setup
 
 # Links
-- [01 Taproot Multisig](/workflow/prd/btc-federation/01_taproot_multisig.md)
+- [01 Taproot Multisig](/workflow/prd/federation/01_taproot_multisig.md)
 
 # Description
 Deploy a local Bitcoin regtest node with fast block generation (~10 seconds) for development. Includes node setup, miner configuration, and RPC interface.

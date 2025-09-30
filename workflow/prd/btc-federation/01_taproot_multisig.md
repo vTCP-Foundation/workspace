@@ -8,7 +8,7 @@
 - **Author(s)**: Dima Chizhevsky
 - **Stakeholders**: Dima Chizhevsky, Mykola Ilashchuk
 - **Status**: Active
-- **Related Documents**: [BTC FastNet Local Node Setup](workspace/workflow/tasks/btc-federation/0/00_btc_fastnet_local_node_setup.md)
+- **Related Documents**: [BTC FastNet Local Node Setup](workspace/workflow/tasks/federation/0/00_btc_fastnet_local_node_setup.md)
 
 ## Executive Summary
 **Objective**: Validate taproot multisig scalability for BTC federation with up to 512 participants using 50% threshold signing.

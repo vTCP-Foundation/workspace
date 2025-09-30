@@ -18,13 +18,13 @@ This version introduces several refinements to enhance security and resolve inco
 
 ## 1. Overview
 
-This document provides a detailed technical specification for the **Issuance Process (Flow 1)** of the [BTC ⟷ vTCP Custody Protocol](/architecture/btc-federation/protocols/BTC%20<->%20vTCP%20Custody%20Protocol.md). This process covers both the creation of new channels and the topping-up of existing ones.
+This document provides a detailed technical specification for the **Issuance Process (Flow 1)** of the [BTC ⟷ vTCP Custody Protocol](/architecture/federation/protocols/BTC%20<->%20vTCP%20Custody%20Protocol.md). This process covers both the creation of new channels and the topping-up of existing ones.
 
 All channel lifecycle events and state transitions within the Federation are managed by the [Federation Channels Registry](/architecture/common/entities/federation_channels_registry.md). This document describes the protocol that triggers those state changes.
 
-For a higher-level, human-oriented explanation of the protocol, please see the main [BTC <-> vTCP Custody Protocol document](/architecture/btc-federation/protocols/BTC%20<->%20vTCP%20Custody%20Protocol.md).
+For a higher-level, human-oriented explanation of the protocol, please see the main [BTC <-> vTCP Custody Protocol document](/architecture/federation/protocols/BTC%20<->%20vTCP%20Custody%20Protocol.md).
 
-For detailed security analysis and attack vectors related to this protocol, see the [Security Analysis and Attack Vectors document](/architecture/btc-federation/protocols/protocol_btc<>vtcp_custody_attacks.md).
+For detailed security analysis and attack vectors related to this protocol, see the [Security Analysis and Attack Vectors document](/architecture/federation/protocols/protocol_btc<>vtcp_custody_attacks.md).
 
 ### 1.1. Prerequisites
 

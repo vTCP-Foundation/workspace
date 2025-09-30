@@ -16,7 +16,7 @@ A [Channel Reconciliation](/architecture/common/entities/vtcp_channel_reconcilia
 
 ## Canonical Hash: `reconciliation_hash`
 
-To provide a single, deterministic, and globally unique identifier for any given reconciliation state, a canonical hash (`reconciliation_hash`) is computed. This hash serves as the definitive fingerprint of the agreement and is used in protocols that require a stable identifier for a specific state, such as the [Cooperative Redemption Flow](/architecture/btc-federation/protocols/BTC%20<->%20vTCP%20Custody%20Protocol%20-%20redemption.md).
+To provide a single, deterministic, and globally unique identifier for any given reconciliation state, a canonical hash (`reconciliation_hash`) is computed. This hash serves as the definitive fingerprint of the agreement and is used in protocols that require a stable identifier for a specific state, such as the [Cooperative Redemption Flow](/architecture/federation/protocols/BTC%20<->%20vTCP%20Custody%20Protocol%20-%20redemption.md).
 
 The hash is computed by both parties as follows:
 

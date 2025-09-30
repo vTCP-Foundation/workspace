@@ -1,8 +1,8 @@
 # 05-E2E - End-to-End Conditions of Satisfaction Validation
 
 # Links
-- [PRD](/workflow/prd/btc-federation/05_hotstuff_consensus.md)
-- [All implementation tasks](/workflow/tasks/btc-federation/05/)
+- [PRD](/workflow/prd/federation/05_hotstuff_consensus.md)
+- [All implementation tasks](/workflow/tasks/federation/05/)
 
 # Description
 Comprehensive end-to-end validation that all Conditions of Satisfaction from the PRD are met, including final system integration testing, performance validation, and acceptance criteria verification.

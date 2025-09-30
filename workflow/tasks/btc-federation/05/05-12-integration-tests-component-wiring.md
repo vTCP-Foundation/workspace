@@ -1,8 +1,8 @@
 # 05-12 - Integration Tests for Component Wiring
 
 # Links
-- [PRD](/workflow/prd/btc-federation/05_hotstuff_consensus.md)
-- [Implementation Task 05-05](/workflow/tasks/btc-federation/05/05-05-component-integration.md)
+- [PRD](/workflow/prd/federation/05_hotstuff_consensus.md)
+- [Implementation Task 05-05](/workflow/tasks/federation/05/05-05-component-integration.md)
 
 # Description
 Develop comprehensive integration tests for component wiring implemented in Task 05-05, focusing on MessageHandler, PhaseManager, ViewManager, LeaderElection, and the overall dependency injection framework.

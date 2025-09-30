@@ -1,8 +1,8 @@
 # 05-14 - Byzantine Fault Tolerance Testing
 
 # Links
-- [PRD](/workflow/prd/btc-federation/05_hotstuff_consensus.md)
-- [Previous tasks](/workflow/tasks/btc-federation/05/)
+- [PRD](/workflow/prd/federation/05_hotstuff_consensus.md)
+- [Previous tasks](/workflow/tasks/federation/05/)
 
 # Description
 Develop comprehensive Byzantine fault tolerance tests covering 15+ specific Byzantine behaviors, validating the system's ability to maintain consensus with up to 1 Byzantine node in a 5-node network, with automated detection and recovery validation.

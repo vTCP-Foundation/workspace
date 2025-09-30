@@ -9,7 +9,7 @@ _**STATE: WIP**_
 
 ## 1. Overview
 
-This document defines the comprehensive addressing and identity framework for all entities within the [vTCP Network (L2)](/architecture/common/entities/vtcp_network.md). It specifies how entities are uniquely identified, located for peer-to-peer communication, and how they manage cryptographic keys for interactions with external L1 blockchains, such as the [Bitcoin Network (L1)](/architecture/common/entities/btc_network.md).
+This document defines the comprehensive addressing and identity framework for all entities within the [vTCP Network (L2)](/architecture/common/entities/vtcp_network.md). It specifies how entities are uniquely identified, located for peer-to-peer communication, and how they manage cryptographic keys for interactions with external L1 blockchains, such as the [Bitcoin Network (L1)](/architecture/common/entities/network_btc.md).
 
 The vTCP protocol's internal operations, particularly within state channels, primarily rely on one-time Lamport Signatures. This choice avoids the complexities of public-key infrastructure for state updates. However, to achieve interoperability with external networks, a robust system for managing and discovering conventional public keys is essential. This document describes that system.
 
@@ -17,7 +17,7 @@ The vTCP protocol's internal operations, particularly within state channels, pri
 
 ### 2.1. vTCP Entity Identifier (`vID`)
 
-The `vID` is the canonical, unique identifier for any entity on the vTCP network, including [Nodes](/architecture/common/entities/vtcp_network_node.md), [Hubs](/architecture/common/entities/vtcp_network_hub.md), and the [Federation](/architecture/common/entities/btc_federation.md) itself.
+The `vID` is the canonical, unique identifier for any entity on the vTCP network, including [Nodes](/architecture/common/entities/vtcp_network_node.md), [Hubs](/architecture/common/entities/hub.md), and the [Federation](/architecture/common/entities/federation_btc.md) itself.
 
 - **Uniqueness:** Each `vID` is guaranteed to be unique across the entire network.
 - **Persistence:** An entity's `vID` is persistent and does not change over its lifetime.
@@ -39,7 +39,7 @@ The vTCP protocol uses Lamport Signatures for signing state updates within [Sett
 
 ### 2.4. Registered External Public Keys
 
-To facilitate cross-chain operations like deposits and redemptions as described in the [BTC <-> vTCP Custody Protocol](/architecture/btc-federation/protocols/BTC%20<->%20vTCP%20Custody%20Protocol.md), entities must be able to associate stable public keys from external networks with their `vID`.
+To facilitate cross-chain operations like deposits and redemptions as described in the [BTC <-> vTCP Custody Protocol](/architecture/federation/protocols/BTC%20<->%20vTCP%20Custody%20Protocol.md), entities must be able to associate stable public keys from external networks with their `vID`.
 
 - **Purpose:** These keys allow other entities (e.g., the Federation) to construct valid L1 transactions payable to the entity. For instance, for a BTC redemption, the Federation needs the user's `BTC` public key to create the payout transaction.
 - **Supported Networks:** The system is designed to be extensible, allowing for the registration of keys for various blockchains (e.g., `BTC`, `ETH`).
@@ -47,7 +47,7 @@ To facilitate cross-chain operations like deposits and redemptions as described 
 
 ## 3. The Entity Registry
 
-The [BTC Federation](/architecture/common/entities/btc_federation.md) is responsible for maintaining a central, authoritative Entity Registry. This registry serves as the network's directory service.
+The [BTC Federation](/architecture/common/entities/federation_btc.md) is responsible for maintaining a central, authoritative Entity Registry. This registry serves as the network's directory service.
 
 **Registry Schema (for each entity):**
 - `vID`: (Primary Key) The unique identifier of the entity.

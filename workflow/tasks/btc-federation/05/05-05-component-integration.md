@@ -1,9 +1,9 @@
 # 05-05 - Component Integration Framework
 
 # Links
-- [PRD](/workflow/prd/btc-federation/05_hotstuff_consensus.md)
-- [Previous task](/workflow/tasks/btc-federation/05/05-04-mock-infrastructure.md)
-- [ADR-005 HotStuff Consensus Protocol](/architecture/btc-federation/adrs/ADR-005-hotstuff-consensus-protocol.md)
+- [PRD](/workflow/prd/federation/05_hotstuff_consensus.md)
+- [Previous task](/workflow/tasks/federation/05/05-04-mock-infrastructure.md)
+- [ADR-005 HotStuff Consensus Protocol](/architecture/federation/adrs/ADR-005-hotstuff-consensus-protocol.md)
 
 # Description
 Integrate all consensus components with a clean dependency injection framework, implementing message handling, phase management, view management, and leader election to create a cohesive consensus system.

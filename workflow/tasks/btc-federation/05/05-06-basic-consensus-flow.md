@@ -1,9 +1,9 @@
 # 05-06 - Basic Consensus Flow (Happy Path)
 
 # Links
-- [PRD](/workflow/prd/btc-federation/05_hotstuff_consensus.md)
-- [Previous task](/workflow/tasks/btc-federation/05/05-05-component-integration.md)
-- [ADR-005 HotStuff Consensus Protocol](/architecture/btc-federation/adrs/ADR-005-hotstuff-consensus-protocol.md)
+- [PRD](/workflow/prd/federation/05_hotstuff_consensus.md)
+- [Previous task](/workflow/tasks/federation/05/05-05-component-integration.md)
+- [ADR-005 HotStuff Consensus Protocol](/architecture/federation/adrs/ADR-005-hotstuff-consensus-protocol.md)
 
 # Description
 Implement the complete basic consensus flow for the happy path scenario, including block proposal logic, vote collection, quorum certificate formation, and the three-phase consensus progression that leads to block commitment and view advancement.

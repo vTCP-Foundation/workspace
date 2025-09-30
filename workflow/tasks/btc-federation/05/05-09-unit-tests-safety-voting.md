@@ -1,8 +1,8 @@
 # 05-09 - Unit Tests for SafetyRules and VotingRule Components
 
 # Links
-- [PRD](/workflow/prd/btc-federation/05_hotstuff_consensus.md)
-- [Implementation Task 05-02](/workflow/tasks/btc-federation/05/05-02-hotstuff-state-machine.md)
+- [PRD](/workflow/prd/federation/05_hotstuff_consensus.md)
+- [Implementation Task 05-02](/workflow/tasks/federation/05/05-02-hotstuff-state-machine.md)
 
 # Description
 Develop comprehensive unit tests for SafetyRules and VotingRule components implemented in Task 05-02, focusing on consensus safety properties, vote validation, and quorum formation.

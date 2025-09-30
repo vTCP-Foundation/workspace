@@ -1,8 +1,8 @@
 # 05-07 - Unit Tests for Data Structures
 
 # Links
-- [PRD](/workflow/prd/btc-federation/05_hotstuff_consensus.md)
-- [Implementation Task 05-01](/workflow/tasks/btc-federation/05/05-01-consensus-foundation-setup.md)
+- [PRD](/workflow/prd/federation/05_hotstuff_consensus.md)
+- [Implementation Task 05-01](/workflow/tasks/federation/05/05-01-consensus-foundation-setup.md)
 
 # Description
 Develop comprehensive unit tests for core data structures implemented in Task 05-01: Block, Vote, QuorumCertificate, and message types, achieving >90% test coverage and validating all behaviors in isolation.

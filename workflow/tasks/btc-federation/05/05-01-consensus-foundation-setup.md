@@ -1,8 +1,8 @@
 # 05-01 - Consensus Foundation Setup
 
 # Links
-- [PRD](/workflow/prd/btc-federation/05_hotstuff_consensus.md)
-- [ADR-005 HotStuff Consensus Protocol](/architecture/btc-federation/adrs/ADR-005-hotstuff-consensus-protocol.md)
+- [PRD](/workflow/prd/federation/05_hotstuff_consensus.md)
+- [ADR-005 HotStuff Consensus Protocol](/architecture/federation/adrs/ADR-005-hotstuff-consensus-protocol.md)
 
 # Description
 Setup proper consensus-related filesystem layout and Go packages, then implement core data structures for the HotStuff consensus protocol including Block, Vote, QuorumCertificate, and message types.

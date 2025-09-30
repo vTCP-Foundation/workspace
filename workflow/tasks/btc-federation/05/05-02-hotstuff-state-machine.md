@@ -1,9 +1,9 @@
 # 05-02 - HotStuff State Machine
 
 # Links
-- [PRD](/workflow/prd/btc-federation/05_hotstuff_consensus.md)
-- [Previous task](/workflow/tasks/btc-federation/05/05-01-consensus-foundation-setup.md)
-- [ADR-005 HotStuff Consensus Protocol](/architecture/btc-federation/adrs/ADR-005-hotstuff-consensus-protocol.md)
+- [PRD](/workflow/prd/federation/05_hotstuff_consensus.md)
+- [Previous task](/workflow/tasks/federation/05/05-01-consensus-foundation-setup.md)
+- [ADR-005 HotStuff Consensus Protocol](/architecture/federation/adrs/ADR-005-hotstuff-consensus-protocol.md)
 
 # Description
 Implement the core HotStuff consensus state machine including the main coordinator, block tree management, safety rules, voting rules, and basic state transitions for the three consensus phases.
