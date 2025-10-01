@@ -35,10 +35,12 @@ Each Federation uses HotStuff BFT consensus to coordinate operations between par
 - Stake amount defines the max capacity of funds that can be held by the Federation (users ⟷ Hubs custody)
 - Participants must maintain stake equal to their share of custody responsibilities
 
-## Hub Connectivity
-- Hubs can connect to multiple Federations simultaneously
-- Each Hub-Federation connection is independent
-- Enables multi-asset operations across different custody systems
+## Hub Selection
+- Federations **select one or several Hubs** to work with
+- Selection is critical because **L1-L2 mirroring depends on Hub reliability**
+- L1-L2 mirroring is one of the Federation's most important services
+- Each Hub-Federation relationship is independent
+- Hubs can work with multiple Federations simultaneously for multi-asset operations
 
 ## Asset-Specific Implementations
 - [BTC Federation](/architecture/common/entities/federation_btc.md) - Bitcoin custody using taproot and FROST
