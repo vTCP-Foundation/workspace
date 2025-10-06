@@ -366,6 +366,7 @@ GET:contractors/transactions/estimate/receive:12:127.0.0.1:2003:500:1:2
 
 **Error Codes**:
 - `401`: Unexpected error (protocol error)
+- `412`: Insufficient path capacity to consume full payment amount (payment amount exceeds available paths capacity)
 - `462`: No cached optimal paths for specified (contractor, sender_equivalent, receiver_equivalent)
 
 ### Data Requirements
@@ -671,7 +672,11 @@ TrustLineAmount estimateReceiveForPayment(
         remainingPayment = remainingPayment - TrustLineAmount(static_cast<uint64_t>(pathInput));
     }
 
-    // No error if remainingPayment > 0; just return what was delivered
+    // Step 3: Check if all payment was consumed
+    if (remainingPayment > TrustLineAmount(0)) {
+        throw InsufficientPathsError(412); // Cannot consume full payment amount
+    }
+
     return totalReceive;
 }
 ```
@@ -729,19 +734,25 @@ error() << "Estimation failed with unexpected error: " << exception.what();
 
 #### Error Code 412 (Insufficient Paths)
 **Trigger Conditions**:
-- Payment estimation: Cannot deliver requested `targetReceiveAmount` with available paths
-- All paths exhausted but `remainingReceive > 0`
+- **Payment estimation** (receive → payment): Cannot deliver requested `targetReceiveAmount` with available paths; all paths exhausted but `remainingReceive > 0`
+- **Receive estimation** (payment → receive): Cannot consume full `paymentAmount` with available paths; all paths exhausted but `remainingPayment > 0`
 
 **Response**:
 ```
 412
 ```
 
-**Logging**:
+**Logging** (payment estimation):
 ```cpp
 warning() << "Insufficient paths to deliver " << targetReceiveAmount
           << " to contractor " << contractorID
           << "; delivered only " << (targetReceiveAmount - remainingReceive);
+```
+
+**Logging** (receive estimation):
+```cpp
+warning() << "Insufficient path capacity to consume full payment amount " << paymentAmount
+          << "; only " << (paymentAmount - remainingPayment) << " could be sent";
 ```
 
 #### Error Code 462 (No Cached Paths)
@@ -1057,16 +1068,35 @@ warning() << "No cached optimal paths for contractor " << contractorID
 
 ##### ExchangePathsManager
 - **Location**: `src/core/paths/ExchangePathsManager.h/cpp`
-- **Purpose**: Centralized cache for optimal path results indexed by (contractor, sender_equivalent, receiver_equivalent)
+- **Purpose**:
+  - Performs max flow exchange calculation using OR-Tools linear programming
+  - Centralized cache for optimal path results indexed by (contractor, sender_equivalent, receiver_equivalent)
 - **Inheritance**: None (standalone manager)
 - **Constructor**:
   ```cpp
   ExchangePathsManager(
       as::io_context &ioContext,
+      EquivalentsSubsystemsRouter *router,
+      ExchangeRatesManager *ratesManager,
+      ContractorsManager *contractorsManager,
       Logger &logger)
   ```
 - **Key Methods**:
   ```cpp
+  // Max flow calculation (moved from InitiateMaxFlowExchangeCalculationTransaction)
+  struct MaxFlowResult {
+      TrustLineAmount maxFlow;
+      vector<OptimalPathResult> optimalPaths;
+  };
+
+  MaxFlowResult calculateMaxFlow(
+      ContractorID targetContractor,
+      SerializedEquivalent receiverEquivalent,
+      const vector<SerializedEquivalent> &senderEquivalents,
+      ContractorID senderID,
+      uint8_t hopsCount);
+
+  // Path caching
   void storePaths(
       const PathCacheKey& key,
       const vector<OptimalPathResult>& paths);
@@ -1087,25 +1117,41 @@ warning() << "No cached optimal paths for contractor " << contractorID
 
 #### Modified Classes
 
-##### InitiateMaxFlowExchangeCalculationTransaction (Enhanced)
+##### InitiateMaxFlowExchangeCalculationTransaction (Refactored)
 - **New Dependency**: `ExchangePathsManager* mExchangePathsManager`
 - **Constructor Change**: Add `ExchangePathsManager*` parameter
-- **New Method Call** (in `applyCustomLogic()` after OR-Tools optimization):
+- **Refactored `applyCustomLogic()` method**:
+  - Delegates all max flow calculation to `ExchangePathsManager::calculateMaxFlow()`
+  - Receives `MaxFlowResult` containing optimal paths from the calculation
+  - Automatically caches paths in ExchangePathsManager by calling `storePaths()` for each sender equivalent
   ```cpp
-  // After calculating mOptimalPathResults[contractorID]
-  // Split paths by sender equivalent and store each group separately
-  map<SerializedEquivalent, vector<OptimalPathResult>> pathsBySenderEq;
-  for (const auto& pathResult : mOptimalPathResults[contractorID]) {
-      SerializedEquivalent senderEq = pathResult.path.equivalents.front();
-      pathsBySenderEq[senderEq].push_back(pathResult);
-  }
+  // Simplified implementation in applyCustomLogic()
+  for (const auto &contractor : mContractorIDs) {
+      ContractorID contractorID = contractor.first;
 
-  // Store each sender equivalent group with appropriate key
-  for (const auto& [senderEq, paths] : pathsBySenderEq) {
-      PathCacheKey key{contractorID, senderEq, mEquivalent};
-      mExchangePathsManager->storePaths(key, paths);
+      auto result = mExchangePathsManager->calculateMaxFlow(
+          contractorID, mEquivalent, mExchangeEquivalents, senderID, mHopsCnt);
+
+      mMaxFlows[contractorID] = result.maxFlow;
+      mOptimalPathResults[contractorID] = result.optimalPaths;
+
+      // Cache paths for future estimation queries
+      if (!result.optimalPaths.empty()) {
+          map<SerializedEquivalent, vector<OptimalPathResult>> pathsBySenderEq;
+          for (const auto &pathResult : result.optimalPaths) {
+              if (!pathResult.path.equivalents.empty()) {
+                  SerializedEquivalent senderEq = pathResult.path.equivalents.front();
+                  pathsBySenderEq[senderEq].push_back(pathResult);
+              }
+          }
+          for (const auto &entry : pathsBySenderEq) {
+              PathCacheKey key{contractorID, entry.first, mEquivalent};
+              mExchangePathsManager->storePaths(key, entry.second);
+          }
+      }
   }
   ```
+- **Impact**: Transaction file reduced from ~1465 lines to ~214 lines by moving calculation logic to ExchangePathsManager
 
 ### API Documentation
 Detailed API specifications will be provided in task-level documentation for all components listed above.

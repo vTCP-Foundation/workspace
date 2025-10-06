@@ -68,11 +68,13 @@ Implement bidirectional payment estimation algorithms (`forwardSimulatePath` and
        - Call `forwardSimulatePath(path, pathInput, appliedCommissions, edgeRemainingCapacity)`
        - Add result to `totalReceive`, subtract `pathInput` from `remainingPayment`
        - Break if `remainingPayment == 0`
+     - If `remainingPayment > 0`: throw `InsufficientPathsError(412)` (cannot consume full payment)
      - Return `totalReceive`
-   - Error handling: catch exceptions, return error 401 for unexpected errors
+   - Error handling: catch exceptions, return error 401 for unexpected errors, error 412 for insufficient capacity, error 462 for no cached paths
 3. Response format:
    - Success: `200:<total_receive_amount>`
    - Error 401: `401` (unexpected error)
+   - Error 412: `412` (insufficient path capacity to consume full payment amount)
    - Error 462: `462` (no cached paths)
 
 ## EstimatePaymentForReceiveAmountCommand and Transaction
@@ -263,6 +265,7 @@ All tests execute in `build-tests` with no Docker dependencies. Mock `ExchangePa
 #### Error Case Tests
 - **No Cached Paths**: Mock `retrievePaths()` returns nullopt, verify error 462
 - **Expired Paths**: Mock TTL exceeded, verify error 462
+- **Insufficient Capacity**: Payment amount exceeds all path capacity (e.g., payment 1100 with max capacity 1000), verify error 412
 
 ### EstimatePaymentForReceiveAmountTransaction Tests
 
