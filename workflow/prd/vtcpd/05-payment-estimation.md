@@ -180,7 +180,8 @@ This iteration establishes foundation for:
      - Iterates through ordered optimal paths until desired receive amount is achieved
      - Accounts for commissions with "charge once" semantics
      - Validates exchange min/max limits
-     - Returns error 412 if paths cannot deliver desired amount
+     - Rejects paths that would require exceeding any `maxExchangeAmount` (no partial utilisation beyond the limit)
+     - Returns error 412 if paths cannot deliver desired amount even after respecting exchange limits
      - Returns error 462 if no cached paths exist for the key
    - **Priority**: High
    - **Dependencies**: ExchangePathsManager
@@ -196,7 +197,8 @@ This iteration establishes foundation for:
      - Iterates through ordered optimal paths distributing payment amount
      - Accounts for commissions with "charge once" semantics
      - Validates exchange min/max limits
-     - Returns delivered amount (may be less than optimal flow if payment insufficient)
+     - Rejects any path whose use would breach a `maxExchangeAmount`; no partial clipping is performed during estimation
+     - Returns delivered amount (may be less than optimal flow if payment insufficient and no compliant path remains)
      - Returns error 462 if no cached paths exist for the key
    - **Priority**: High
    - **Dependencies**: ExchangePathsManager
@@ -209,7 +211,7 @@ This iteration establishes foundation for:
    - **Acceptance Criteria**:
      - Simulates flow through path segments applying cumulative exchange rates
      - Applies commissions only once per (ContractorID, SerializedEquivalent) pair
-     - Validates exchange amounts against min/max limits
+     - Validates exchange amounts against min/max limits (estimation treats `maxExchangeAmount` as a hard stop)
      - Respects edge capacity constraints
      - Returns accurate delivered amount at receiver
    - **Priority**: High
@@ -593,7 +595,7 @@ TrustLineAmount estimatePaymentForReceive(
             edgeRemainingCapacity
         );
 
-        if (requiredPayment <= 0.0) continue; // Path exhausted
+        if (requiredPayment <= 0.0) continue; // Path exhausted or violates constraints
 
         totalPayment = totalPayment + TrustLineAmount(static_cast<uint64_t>(requiredPayment));
         remainingReceive = remainingReceive - TrustLineAmount(static_cast<uint64_t>(targetForPath));
@@ -614,6 +616,8 @@ TrustLineAmount estimatePaymentForReceive(
 - Accounts for commissions: if commission was deducted on forward pass, add it back to compute required input
 - Validates edge capacity: ensure required input doesn't exceed available capacity
 - Returns required payment amount at sender to achieve target output at receiver
+
+> **Estimation vs. Planning:** During on-demand estimation any path whose utilisation would exceed `maxExchangeAmount` must be rejected, signalling `412` if no compliant alternative exists. Max-flow planning remains free to pre-trim candidate flows so that the helper never sees amounts above the limit.
 
 #### Receive Estimation Algorithm (Payment → Receive)
 **Goal**: Determine receive amount in receiver equivalent when paying `paymentAmount` in sender equivalent.
@@ -666,7 +670,7 @@ TrustLineAmount estimateReceiveForPayment(
             edgeRemainingCapacity
         );
 
-        if (pathOutput <= 0.0) continue; // Path produced no output
+        if (pathOutput <= 0.0) continue; // Path produced no output or would violate constraints
 
         totalReceive = totalReceive + TrustLineAmount(static_cast<uint64_t>(pathOutput));
         remainingPayment = remainingPayment - TrustLineAmount(static_cast<uint64_t>(pathInput));
@@ -686,7 +690,7 @@ TrustLineAmount estimateReceiveForPayment(
 - Applies exchange rates: `outputAmount = inputAmount * exchangeRate`
 - Deducts commissions with "charge once" semantics (checks `appliedCommissions` set)
 - Validates edge capacity: reduces flow if edge insufficient
-- Returns delivered amount at receiver
+- Returns delivered amount at receiver; if the requested input violates an exchange limit the path contributes 0 and the caller must decide whether to try another route or fail early
 
 #### Commission Handling Details
 **"Charge Once" Semantics**:
@@ -707,7 +711,7 @@ TrustLineAmount estimateReceiveForPayment(
   - Extract `minExchangeAmount` and `maxExchangeAmount` from `ExchangeStep`
   - Check if flow amount falls within `[min, max]` range
   - If below min: skip path (cannot use exchange)
-  - If above max: cap flow at max
+  - If above max: estimation must reject the path (return 0 contribution); planning code that wants partial utilisation must trim the input *before* calling the helper
   - If within range: proceed normally
 
 **Multi-Step Exchanges**:

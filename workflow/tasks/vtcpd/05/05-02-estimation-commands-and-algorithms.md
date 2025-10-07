@@ -36,7 +36,7 @@ Implement bidirectional payment estimation algorithms (`forwardSimulatePath` and
    - Extract `minExchangeAmount` and `maxExchangeAmount` from `ExchangeStep`
    - Check flow amount against limits: `amount >= minExchangeAmount && amount <= maxExchangeAmount`
    - If below min: skip path (return 0.0)
-   - If above max: cap flow at max
+   - If above max: estimation rejects the path (return 0.0); planning code should pre-trim before invoking helper
    - If within range: proceed normally
 4. Edge capacity tracking:
    - Use `EdgeKey{from, to, equivalent}` as map key
@@ -121,7 +121,7 @@ Implement bidirectional payment estimation algorithms (`forwardSimulatePath` and
 ## DOD Criteria
 - `forwardSimulatePath()` and `inverseSimulatePath()` correctly simulate flow with exchange rates, commissions, and capacity constraints
 - Commission "charge once" semantics verified: same intermediate node does not charge twice across multiple paths
-- Exchange limit validation correctly skips or caps flows based on min/max constraints
+- Exchange limit validation correctly skips flows outside allowable bounds (no partial clipping beyond `maxExchangeAmount` during estimation)
 - Edge capacity tracking correctly reduces available capacity after each path simulation
 - Both command classes successfully parse input parameters and initiate corresponding transactions
 - Both transaction classes return correct results for valid inputs
@@ -225,11 +225,11 @@ All tests execute in `build-tests` with no Docker dependencies. Mock `ExchangePa
 ### Path Simulation Algorithm Tests
 1. **Forward Simulation - Simple Path**: Single-equivalent path A→B→C, no exchanges, verify commission deduction
 2. **Forward Simulation - Exchange Path**: Path with exchange step, verify exchange rate application
-3. **Forward Simulation - Min/Max Limits**: Exchange with min=100, max=500, verify flow capping
+3. **Forward Simulation - Min/Max Limits**: Exchange with min=100, max=500, verify that inputs above max yield 0 output (path rejected)
 4. **Forward Simulation - Capacity Constraint**: Edge capacity < input flow, verify flow reduction
 5. **Inverse Simulation - Simple Path**: Reverse of forward test 1, verify commission addition
 6. **Inverse Simulation - Exchange Path**: Reverse of forward test 2, verify inverse exchange rate
-7. **Inverse Simulation - Min/Max Limits**: Same limits as forward test 3, verify rejection or capping
+7. **Inverse Simulation - Min/Max Limits**: Same limits as forward test 3, verify rejection when the target would exceed `maxExchangeAmount`
 8. **Inverse Simulation - Capacity Constraint**: Edge capacity < required input, verify path skipped (returns 0.0)
 9. **Commission Charge Once**: Two paths sharing intermediate node B, verify commission deducted only on first path
 
@@ -260,7 +260,7 @@ All tests execute in `build-tests` with no Docker dependencies. Mock `ExchangePa
 - **Test 1**: Payment amount 50 in eq 1
   - Expected: Receive 0 (below min exchange)
 - **Test 2**: Payment amount 600 in eq 1
-  - Expected: Receive ~750 in eq 2 (capped at max exchange: 500 * 1.5)
+  - Expected: Error 412 (request exceeds max exchange amount of 500)
 
 #### Error Case Tests
 - **No Cached Paths**: Mock `retrievePaths()` returns nullopt, verify error 462
@@ -313,7 +313,7 @@ All tests execute in `build-tests` with no Docker dependencies. Mock `ExchangePa
 - All unit tests pass in `build-tests`
 - Estimation results match expected values for all test topologies
 - Commission "charge once" verified across multi-path scenarios
-- Exchange limit validation correctly skips or caps flows
+- Exchange limit validation correctly rejects flows outside allowable bounds (no partial capping during estimation)
 - Edge capacity tracking reduces available capacity correctly
 - Error codes 401, 412, 462 returned correctly in all edge cases
 - Command parsing handles valid and invalid inputs gracefully
