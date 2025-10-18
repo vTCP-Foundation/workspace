@@ -49,11 +49,11 @@ Extract data structures (`ExchangePath`, `OptimalPathResult`, `EdgeKey`) from `I
 
 ## Integration with InitiateMaxFlowExchangeCalculationTransaction
 1. Add `ExchangePathsManager*` dependency to transaction constructor
-2. After OR-Tools optimization completes (in `applyCustomLogic()` after `mOptimalPathResults` populated):
-   - Split `mOptimalPathResults[contractorID]` by sender equivalent (first equivalent in each path's `equivalents` vector)
+2. After receiving calculation results from `ExchangePathsManager::calculateMaxFlow()`:
+   - Split optimal paths by sender equivalent (first equivalent in each path's `equivalents` vector)
    - For each sender equivalent group, create `PathCacheKey{contractorID, senderEq, mEquivalent}` where `mEquivalent` is the receiver equivalent
    - Call `mExchangePathsManager->storePaths(key, paths)` for each group
-3. No changes to existing max flow calculation logic or path ordering
+3. Max flow calculation logic now handled by ExchangePathsManager, transaction focuses on coordination
 
 ## DOD Criteria
 - All data structures extracted to separate headers and successfully included in both `InitiateMaxFlowExchangeCalculationTransaction` and `ExchangePathsManager`
@@ -100,20 +100,30 @@ Extract data structures (`ExchangePath`, `OptimalPathResult`, `EdgeKey`) from `I
 ## Step 3: Integrate with InitiateMaxFlowExchangeCalculationTransaction
 1. Add `ExchangePathsManager* mExchangePathsManager` member to transaction
 2. Update constructor to accept and initialize `mExchangePathsManager` parameter
-3. Locate point in `applyCustomLogic()` where `mOptimalPathResults[contractorID]` is fully populated
-4. Add path splitting logic:
+3. In `applyCustomLogic()`, receive results from `mExchangePathsManager->calculateMaxFlow()`
+4. Add path splitting logic after receiving calculation results:
    ```cpp
-   // Split paths by sender equivalent
-   map<SerializedEquivalent, vector<OptimalPathResult>> pathsBySenderEq;
-   for (const auto& pathResult : mOptimalPathResults[contractorID]) {
-       SerializedEquivalent senderEq = pathResult.path.equivalents.front();
-       pathsBySenderEq[senderEq].push_back(pathResult);
-   }
+   // Get calculation results from ExchangePathsManager
+   auto result = mExchangePathsManager->calculateMaxFlow(
+       contractorID, mEquivalent, mExchangeEquivalents, senderID, mHopsCnt);
+   
+   mMaxFlows[contractorID] = result.maxFlow;
 
-   // Store each group with appropriate key
-   for (const auto& [senderEq, paths] : pathsBySenderEq) {
-       PathCacheKey key{contractorID, senderEq, mEquivalent};
-       mExchangePathsManager->storePaths(key, paths);
+   // Split optimal paths by sender equivalent
+   if (!result.optimalPaths.empty()) {
+       map<SerializedEquivalent, vector<OptimalPathResult>> pathsBySenderEq;
+       for (const auto& pathResult : result.optimalPaths) {
+           if (!pathResult.path.equivalents.empty()) {
+               SerializedEquivalent senderEq = pathResult.path.equivalents.front();
+               pathsBySenderEq[senderEq].push_back(pathResult);
+           }
+       }
+
+       // Store each group with appropriate key
+       for (const auto& entry : pathsBySenderEq) {
+           PathCacheKey key{contractorID, entry.first, mEquivalent};
+           mExchangePathsManager->storePaths(key, entry.second);
+       }
    }
    ```
 5. Update transaction factory to inject `ExchangePathsManager` dependency
@@ -159,19 +169,19 @@ All tests execute in `build-tests` with no Docker dependencies. Mock all externa
 
 ### Integration Tests
 1. **Path Splitting Test**:
-   - Mock `mOptimalPathResults` with 3 paths: 2 starting in equivalent 1, 1 starting in equivalent 2
+   - Set up topology with paths starting from different sender equivalents (2 paths in eq 1, 1 path in eq 2)
    - Run transaction, verify `ExchangePathsManager` receives two `storePaths()` calls with correct keys and path counts
 2. **Receiver Equivalent Binding Test**:
    - Run transaction with `mEquivalent = 5` (receiver equivalent)
    - Verify all stored `PathCacheKey` instances have `receiverEquivalent = 5`
-3. **Regression Test**: Run existing max flow calculation tests, verify identical `mOptimalPathResults` output before and after integration
+3. **Regression Test**: Run existing max flow calculation tests, verify identical optimal path results before and after refactoring
 
 ## Success Criteria
 - All unit tests pass in `build-tests`
 - No memory leaks detected during TTL timer tests
 - Thread safety tests complete without data corruption or crashes
 - Path splitting produces correct key-path associations for all test scenarios
-- Existing max flow calculation behavior unchanged (regression tests pass)
+- Max flow calculation behavior preserved after refactoring (regression tests pass)
 
 # Verification and Validation
 

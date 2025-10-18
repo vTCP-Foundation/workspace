@@ -40,7 +40,17 @@ This task establishes the core architecture for multi-equivalent payments, repla
 13. Use EquivalentsSubsystemsRouter instead of direct managers (iAmGateway, TrustLinesManager, TopologyCacheManager, MaxFlowCacheManager)
 14. Methods accept SerializedEquivalent parameter where needed
 15. Location: `src/core/transactions/transactions/regular/payments/base/BaseExchangePaymentTransaction.h`
-16. Inherits core payment logic structure from BasePaymentTransaction
+16. **CRITICAL**: Transfer ALL code from BasePaymentTransaction to BaseExchangePaymentTransaction and adapt for multi-equivalent support. This is NOT about creating method signatures with `throw RuntimeError("")` placeholders. This means:
+    - Copy EVERY method implementation from BasePaymentTransaction.cpp
+    - Adapt each method to use EquivalentsSubsystemsRouter pattern:
+      - Replace `mTrustLinesManager` with `trustLinesManager(equivalent)` calls
+      - Replace `mTopologyCacheManager` with `topologyCacheManager(equivalent)` calls
+      - Replace `mMaxFlowCacheManager` with `maxFlowCacheManager(equivalent)` calls
+      - Replace `mIAmGateway` with `iAmGateway(equivalent)` calls
+      - Ensure equivalent parameters are passed through call chains
+    - Transfer ALL voting methods, reservation methods, transaction lifecycle methods, recovery methods, observing methods, commit/rollback methods, helper methods, validation methods, serialization methods, and cycles methods
+    - Only the methods that already have implementation (like serializeToBytes, totalReservedAmount, etc.) should be kept as-is
+17. Inherits core payment logic structure from BasePaymentTransaction
 
 ### CoordinatorExchangePaymentTransaction
 17. Create class analogous to CoordinatorPaymentTransaction
@@ -49,16 +59,36 @@ This task establishes the core architecture for multi-equivalent payments, repla
 20. Use ExchangePathsManager pointer instead of PathsManager
 21. mPathsStats uses OptimalPathResult instead of PathStats
 22. Location: `src/core/transactions/transactions/regular/payments/CoordinatorExchangePaymentTransaction.h`
+23. **CRITICAL**: Transfer ALL code from CoordinatorPaymentTransaction to CoordinatorExchangePaymentTransaction and adapt for multi-equivalent support. This means:
+    - Copy EVERY stage handler method implementation from CoordinatorPaymentTransaction.cpp
+    - Adapt path processing to use ExchangePathsManager instead of PathsManager
+    - Adapt mPathsStats to use OptimalPathResult instead of PathStats
+    - Ensure all reservation coordination handles equivalents correctly
+    - Transfer all voting stages, final amounts configuration, error handling, and response methods
+    - Only the methods that are already implemented (like run(), addPathForFurtherProcessing(), etc.) should be kept as-is
 
 ### ReceiverExchangePaymentTransaction
 23. Create class analogous to ReceiverPaymentTransaction
 24. Inherit from BaseExchangePaymentTransaction
 25. Location: `src/core/transactions/transactions/regular/payments/ReceiverExchangePaymentTransaction.h`
+26. **CRITICAL**: Transfer ALL code from ReceiverPaymentTransaction to ReceiverExchangePaymentTransaction and adapt for multi-equivalent support. This means:
+    - Copy EVERY method implementation from ReceiverPaymentTransaction.cpp
+    - Adapt initialization stages, amount reservation stages, final amounts configuration, final reservations confirmation stages
+    - Adapt checkReservationsDirections() for multi-equivalent validation with ExchangeRatesManager and CommissionsManager
+    - Transfer all approval/rejection logic, votes stages, error handling, and helper methods
+    - Only the methods that are already implemented should be kept as-is
+    - Port the entire `ReceiverPaymentTransaction` implementation before adapting; all logic, helpers, and overrides must be copied and only adjusted where new multi-equivalent behaviour is required (no temporary stubs or empty methods)
 
 ### IntermediateNodeExchangePaymentTransaction
-26. Create class analogous to IntermediateNodePaymentTransaction
-27. Inherit from BaseExchangePaymentTransaction
-28. Location: `src/core/transactions/transactions/regular/payments/IntermediateNodeExchangePaymentTransaction.h`
+27. Create class analogous to IntermediateNodePaymentTransaction
+28. Inherit from BaseExchangePaymentTransaction
+29. Location: `src/core/transactions/transactions/regular/payments/IntermediateNodeExchangePaymentTransaction.h`
+30. **CRITICAL**: Transfer ALL code from IntermediateNodePaymentTransaction to IntermediateNodeExchangePaymentTransaction and adapt for multi-equivalent support. This means:
+    - Copy EVERY method implementation from IntermediateNodePaymentTransaction.cpp
+    - Adapt initialization stages, reservation request processing, reservation response stages
+    - Adapt checkReservationsDirections() for multi-equivalent validation with ExchangeRatesManager and CommissionsManager
+    - Transfer all forwarding logic, votes stages, error handling, and helper methods
+    - Only the methods that are already implemented should be kept as-is
 
 ## Definition of Done
 - [x] PathReservation.h created with all three fields (pathID, amount, equivalent)

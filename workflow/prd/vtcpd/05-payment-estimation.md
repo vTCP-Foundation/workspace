@@ -18,8 +18,8 @@ This PRD introduces payment estimation capabilities that enable users to calcula
 
 ### Current project state
 - Exchange Flow Calculation (PRD 04) computes optimal cross-equivalent payment paths using OR-Tools
-- `InitiateMaxFlowExchangeCalculationTransaction` produces `mOptimalPathResults` with detailed path information
-- Optimal paths are sorted by efficiency but not persisted for reuse
+- `ExchangePathsManager` performs max flow calculation and caches optimal path results
+- Optimal paths are sorted by efficiency and cached per (contractor, sender_equivalent, receiver_equivalent)
 
 ### This iteration's focus
 - Create `ExchangePathsManager` to store and manage optimal path results per (contractor, sender_equivalent, receiver_equivalent)
@@ -54,7 +54,7 @@ After computing maximum receivable flow using `InitiateMaxFlowExchangeCalculatio
 1. How much they need to pay (in sender equivalent) to receive a specific amount (in receiver equivalent)
 2. How much they will receive (in receiver equivalent) if they pay a specific amount (in sender equivalent)
 
-Currently, this information exists in `mOptimalPathResults` within the transaction but is not accessible for subsequent queries, forcing users to either:
+This information is computed during max flow calculation and needs to be accessible for subsequent queries. Without proper caching, users would be forced to either:
 - Trigger new topology collection (expensive)
 - Implement manual estimation (error-prone)
 
@@ -235,10 +235,10 @@ This iteration establishes foundation for:
 #### Enhancements to Existing Features
 
 1. **InitiateMaxFlowExchangeCalculationTransaction Enhancement**
-   - **Current State**: Computes optimal paths and stores in local `mOptimalPathResults`
+   - **Current State**: Delegates max flow calculation to `ExchangePathsManager::calculateMaxFlow()`
    - **Proposed Changes**:
-     - After OR-Tools optimization, split `mOptimalPathResults` by sender equivalent
-     - For each sender equivalent, transfer paths starting with that equivalent to `ExchangePathsManager` with key (contractor, sender_equivalent, receiver_equivalent)
+     - After receiving calculation results, split optimal paths by sender equivalent
+     - For each sender equivalent, cache paths in `ExchangePathsManager` with key (contractor, sender_equivalent, receiver_equivalent)
      - Associate paths with timestamp for TTL management
    - **Impact Assessment**: Minimal - adds path splitting and storage logic after optimization completes
    - **Migration Strategy**: No migration needed; purely additive change
@@ -951,7 +951,7 @@ warning() << "No cached optimal paths for contractor " << contractorID
 - Error codes 401, 412, 462 triggered correctly in respective scenarios
 - No memory leaks detected in TTL cleanup tests
 - Thread safety validated with concurrent access tests
-- Path splitting logic validated against original mOptimalPathResults
+- Path splitting logic validated against calculated optimal paths
 
 ## Deployment & Release Strategy
 ### Release Approach
@@ -1137,7 +1137,6 @@ warning() << "No cached optimal paths for contractor " << contractorID
           contractorID, mEquivalent, mExchangeEquivalents, senderID, mHopsCnt);
 
       mMaxFlows[contractorID] = result.maxFlow;
-      mOptimalPathResults[contractorID] = result.optimalPaths;
 
       // Cache paths for future estimation queries
       if (!result.optimalPaths.empty()) {

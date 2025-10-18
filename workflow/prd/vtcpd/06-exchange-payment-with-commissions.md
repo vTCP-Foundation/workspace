@@ -4,8 +4,8 @@
 - **Project Name**: Exchange Payment with Commissions and Multi-Equivalent Support
 - **PRD ID**: 06
 - **Phase/Iteration**: Phase 1, Initial Implementation
-- **Document Version**: 1.1
-- **Date**: 2025-10-06
+- **Document Version**: 1.2
+- **Date**: 2025-10-16
 - **Author(s)**: Claude Code, based on Architect's requirements
 - **Stakeholders**: Mykola Ilashchuk, Dima Chizhevsky
 - **PRD Status**: 1.1 - PRD file created
@@ -113,7 +113,7 @@ The primary goals of this iteration are to enable multi-equivalent payment execu
 #### New Features/Enhancements
 1. **BaseExchangePaymentTransaction**: Base class using EquivalentsSubsystemsRouter instead of direct manager access
 2. **CoordinatorExchangePaymentTransaction**: Multi-equivalent payment coordinator using ExchangePathsManager
-3. **ReceiverExchangePaymentTransaction**: Receiver handling multi-equivalent reservations
+3. **ReceiverExchangePaymentTransaction**: Receiver handling multi-equivalent reservations. Implementation must start from a full port of the existing `ReceiverPaymentTransaction` behaviour; copy the complete class and only adapt sections that require new multi-equivalent logic. Placeholder methods are not acceptable.
 4. **IntermediateNodeExchangePaymentTransaction**: Intermediate node with exchange and commission validation
 5. **Multi-equivalent reservation protocol**: Extended messages with reservation equivalents
 6. **Multiple receipt support**: Vector of (equivalent, signature) pairs in messages
@@ -185,6 +185,7 @@ This iteration establishes foundation for:
      - Constructor accepts EquivalentsSubsystemsRouter instead of individual managers (iAmGateway, TrustLinesManager, TopologyCacheManager, MaxFlowCacheManager)
      - Methods accept SerializedEquivalent parameter where needed to retrieve correct manager
      - Located in same directory as BasePaymentTransaction
+     - **IMPORTANT**: ALL code from BasePaymentTransaction must be transferred and adapted for multi-equivalent support using EquivalentsSubsystemsRouter. This includes all voting methods, reservation methods, transaction lifecycle methods, recovery methods, observing methods, commit/rollback methods, helper methods, validation methods, serialization methods, and cycles methods. Only method signatures with `throw RuntimeError("")` placeholders are NOT acceptable; complete implementations are required.
      - Inherits core payment logic while enabling multi-equivalent support
    - **Priority**: High
    - **Dependencies**: EquivalentsSubsystemsRouter
@@ -201,6 +202,9 @@ This iteration establishes foundation for:
      - Supports exchangeEquivalents from command (via CreditUsageExchangeCommand)
      - Implements path reservation with equivalent tracking
      - Handles multiple receipts per neighbor (one per equivalent)
+     - Calculates `mExchangeAmount` (sender payment amount in sender equivalent) in `runPaymentInitializationStage()` using cached optimal paths, similar to `EstimatePaymentForReceiveAmountTransaction`
+     - Uses `mExchangeAmount` for all sender-side payment checks and validations instead of `mAmount` (receiver amount)
+     - **IMPORTANT**: ALL code from CoordinatorPaymentTransaction must be transferred and adapted for multi-equivalent support. This includes all stage handlers, path processing logic, reservation coordination, voting stages, final amounts configuration, and error handling. Only method signatures with `throw RuntimeError("")` placeholders are NOT acceptable; complete implementations are required.
      - Located alongside CoordinatorPaymentTransaction
    - **Priority**: High
    - **Dependencies**: BaseExchangePaymentTransaction, ExchangePathsManager, CreditUsageExchangeCommand
@@ -220,6 +224,7 @@ This iteration establishes foundation for:
        - Deduct commission once per incoming equivalent if same as outgoing (transit only, not exchange)
        - Return false if exchange rate not found or sums don't match
      - Support multiple receipts (one per equivalent)
+     - **IMPORTANT**: ALL code from ReceiverPaymentTransaction and IntermediateNodePaymentTransaction respectively must be transferred and adapted for multi-equivalent support. This includes all initialization stages, amount reservation stages, final amounts configuration, final reservations confirmation, votes stages, approval/rejection logic, and all helper methods. Only method signatures with `throw RuntimeError("")` placeholders are NOT acceptable; complete implementations are required.
      - Located alongside respective payment transactions
    - **Priority**: High
    - **Dependencies**: BaseExchangePaymentTransaction, ExchangeRatesManager, CommissionsManager
@@ -251,6 +256,16 @@ This iteration establishes foundation for:
      - Old transactions create single-element vector with mEquivalent
      - New transactions populate vector with all relevant equivalents
      - Serialize/deserialize vector in both messages
+     - **Receipt Generation (Sending Side)**:
+       - **IntermediateNodeExchangePaymentTransaction**: Group outgoing reservations by equivalent, create separate receipt for each equivalent, send as vector in TransactionPublicKeyHashMessage
+       - **CoordinatorExchangePaymentTransaction**: Group outgoing reservations by equivalent, create separate receipt for each equivalent, send as vector in FinalAmountsConfigurationMessage
+       - Even with single equivalent, send receipts as vector with one element
+       - Use appropriate TrustLinesManager for each equivalent (not pre-determined mEquivalent manager)
+     - **Receipt Verification (Receiving Side)**:
+       - **IntermediateNodeExchangePaymentTransaction**: In runFinalReservationsNeighborConfirmation and runFinalReservationsCoordinatorConfirmation, iterate through signatures vector, group incoming reservations by equivalent, verify each receipt signature against corresponding equivalent's total incoming amount using appropriate TrustLinesManager for that equivalent
+       - **ReceiverExchangePaymentTransaction**: In runFinalReservationsNeighborConfirmation and runFinalReservationsCoordinatorConfirmation, same verification logic - iterate through all receipts and verify each against correct equivalent's amount
+       - All receipts must verify successfully for transaction to proceed
+       - Use keychain from correct TrustLinesManager per equivalent (not pre-determined mEquivalent manager)
    - **Priority**: High
    - **Dependencies**: Enhanced reservation protocol
 
@@ -274,8 +289,10 @@ This iteration establishes foundation for:
    - **Proposed Changes**:
      - Add fields from PathStats: `mMaxPathFlow`, `mIsValid`, `mIntermediateNodesStates` (vector), `NodeState` enum
      - Add all methods from PathStats for path state management
+     - Add `paymentFlow` field and `flows` vector for flow calculation (Task 06-12)
+     - Add `calculateFlows(paymentAmount)` method for computing per-edge flows
      - Note: Do NOT add `mPath` (Path::Shared) field; existing `ExchangePath path` serves this role
-   - **Impact Assessment**: Enables path state tracking during reservation phase
+   - **Impact Assessment**: Enables path state tracking during reservation phase and accurate flow calculation for reservation amounts
    - **Migration Strategy**: Direct field addition; no data migration needed
 
 2. **ExchangePath Enhancement**
@@ -487,6 +504,77 @@ enum NodeState {
 
 ### Algorithm Specifications
 
+#### mExchangeAmount Calculation in runPaymentInitializationStage()
+**Purpose**: Calculate the amount coordinator needs to pay (in sender equivalent) to deliver the desired amount (in receiver equivalent)
+
+**Algorithm**:
+```cpp
+TransactionResult::SharedConst runPaymentInitializationStage() {
+    // ... [self contractor check and other initialization] ...
+
+    // Calculate mExchangeAmount (amount to pay in sender equivalent)
+    // using cached paths similar to EstimatePaymentForReceiveAmountTransaction
+    try {
+        PathCacheKey key{mContractorID, mExchangeEquivalent, mEquivalent};
+        auto cachedPaths = mExchangePathsManager->retrievePaths(key);
+
+        if (!cachedPaths) {
+            warning() << "No cached optimal paths for contractor " << mContractorID
+                      << " with sender_eq=" << mExchangeEquivalent
+                      << " and receiver_eq=" << mEquivalent;
+            return resultNoPathsError();
+        }
+
+        // Calculate required payment amount (simplified approach without inverseSimulatePath)
+        TrustLineAmount remainingReceive = mCommand->amount();  // mAmount - receiver amount
+        TrustLineAmount totalPayment = TrustLineAmount(0);
+
+        for (const auto &pathResult : *cachedPaths) {
+            if (remainingReceive == TrustLineAmount(0)) {
+                break;
+            }
+
+            // Use the minimum of remaining needed and what this path can deliver
+            TrustLineAmount deliveredAmount = min(remainingReceive, pathResult.received_amount);
+
+            // For simplified calculation: assume optimal_flow is proportional to received_amount
+            double ratio = deliveredAmount.convert_to<double>() / pathResult.received_amount.convert_to<double>();
+            TrustLineAmount requiredPayment(static_cast<uint64_t>(pathResult.optimal_flow.convert_to<double>() * ratio));
+
+            totalPayment = totalPayment + requiredPayment;
+            remainingReceive = remainingReceive - deliveredAmount;
+        }
+
+        if (remainingReceive > TrustLineAmount(0)) {
+            warning() << "Insufficient paths to deliver " << mCommand->amount()
+                      << " to contractor " << mContractorID
+                      << "; can deliver only " << (mCommand->amount() - remainingReceive);
+            return resultInsufficientFundsError();
+        }
+
+        mExchangeAmount = totalPayment;
+        info() << "Calculated exchange amount: " << mExchangeAmount
+               << " (sender eq=" << mExchangeEquivalent << ") "
+               << "to deliver " << mCommand->amount()
+               << " (receiver eq=" << mEquivalent << ")";
+
+    } catch (const exception &e) {
+        error() << "Error calculating exchange amount: " << e.what();
+        return resultProtocolError();
+    }
+
+    // ... [continue with rest of initialization] ...
+}
+```
+
+**Key Points**:
+- **mAmount**: Amount receiver gets (in receiver equivalent `mEquivalent`)
+- **mExchangeAmount**: Amount sender pays (in sender equivalent `mExchangeEquivalent`)
+- Uses simplified proportional calculation instead of full `inverseSimulatePath`
+- Returns `resultNoPathsError()` if no cached paths available
+- Returns `resultInsufficientFundsError()` if paths cannot deliver full amount
+- All subsequent sender-side checks use `mExchangeAmount` instead of `mAmount`
+
 #### runPathsResourceProcessingStage() in CoordinatorExchangePaymentTransaction
 **Purpose**: Retrieve optimal paths from ExchangePathsManager and prepare for reservation
 
@@ -639,6 +727,147 @@ bool checkReservationsDirections() const {
 - No exchange rate → validation fails
 - Sums must match exactly
 
+#### addFinalConfigurationOnPath() in CoordinatorExchangePaymentTransaction
+**Purpose**: Store final flow configuration for each node on path using per-edge flows from calculateFlows()
+
+**Problem Context**:
+Method was copied from CoordinatorPaymentTransaction where all edges had same flow (single-equivalent payments). In exchange payments, each edge has different flow due to commissions and exchanges. The flows vector from calculateFlows() contains the actual flow amounts for each edge between nodes.
+
+**Correct Algorithm**:
+```cpp
+void addFinalConfigurationOnPath(const PathID &pathID, OptimalPathResult *pathStats) {
+    // Step 1: Validate flows vector
+    if (pathStats->flows.empty()) {
+        throw ValueError("flows vector is empty - calculateFlows() must be called first");
+    }
+
+    size_t expectedFlowsSize = pathStats->mIntermediateNodesStates.size() + 1;
+    if (pathStats->flows.size() != expectedFlowsSize) {
+        throw ValueError("flows vector size mismatch: expected " +
+                        to_string(expectedFlowsSize) + ", got " +
+                        to_string(pathStats->flows.size()));
+    }
+
+    // Step 2: Add payment participants (unchanged from original)
+    for (const auto &contractor : mCurrentPathParticipants) {
+        bool participantIncluded = false;
+        for (const auto &paymentParticipant : mPaymentParticipants) {
+            if (contractor == paymentParticipant.second) {
+                participantIncluded = true;
+                break;
+            }
+        }
+        if (!participantIncluded) {
+            mPaymentParticipants.insert(make_pair(mCurrentFreePaymentID, contractor));
+            mPaymentNodesIds.insert(make_pair(contractor->mainAddress()->fullAddress(),
+                                              mCurrentFreePaymentID));
+            mCurrentFreePaymentID++;
+        }
+    }
+
+    // Step 3: Add configurations for intermediate nodes
+    // Each intermediate node gets TWO reservations: incoming and outgoing
+    for (const auto &contractor : mCurrentPathParticipants) {
+        int position = pathStats->path().positionOfNode(contractor->mainAddress());
+        if (position < 0) {
+            throw ValueError("Intermediate node not found in path: " +
+                           contractor->mainAddress()->fullAddress());
+        }
+
+        auto nodeKey = contractor->mainAddress()->fullAddress();
+
+        // Add incoming reservation (from previous node)
+        if (position > 0) {
+            const auto& incomingFlow = pathStats->flows[position - 1];
+            PathReservation incomingReservation(
+                pathID,
+                make_shared<const TrustLineAmount>(incomingFlow.first),
+                incomingFlow.second);
+
+            if (mNodesFinalAmountsConfiguration.find(nodeKey) ==
+                mNodesFinalAmountsConfiguration.end()) {
+                mNodesFinalAmountsConfiguration[nodeKey] = {incomingReservation};
+            } else {
+                mNodesFinalAmountsConfiguration[nodeKey].push_back(incomingReservation);
+            }
+        }
+
+        // Add outgoing reservation (to next node)
+        if (position < static_cast<int>(pathStats->path().nodes.size()) - 1) {
+            const auto& outgoingFlow = pathStats->flows[position];
+            PathReservation outgoingReservation(
+                pathID,
+                make_shared<const TrustLineAmount>(outgoingFlow.first),
+                outgoingFlow.second);
+
+            mNodesFinalAmountsConfiguration[nodeKey].push_back(outgoingReservation);
+        }
+    }
+
+    // Step 4: Add incoming reservation for receiver
+    int receiverPosition = pathStats->path().positionOfNode(mContractor->mainAddress());
+    if (receiverPosition < 0) {
+        throw ValueError("Receiver not found in path: " +
+                       mContractor->mainAddress()->fullAddress());
+    }
+
+    const auto& receiverIncomingFlow = pathStats->flows[receiverPosition - 1];
+    PathReservation receiverReservation(
+        pathID,
+        make_shared<const TrustLineAmount>(receiverIncomingFlow.first),
+        receiverIncomingFlow.second);
+
+    auto receiverKey = mContractor->mainAddress()->fullAddress();
+    if (mNodesFinalAmountsConfiguration.find(receiverKey) ==
+        mNodesFinalAmountsConfiguration.end()) {
+        mNodesFinalAmountsConfiguration[receiverKey] = {receiverReservation};
+    } else {
+        mNodesFinalAmountsConfiguration[receiverKey].push_back(receiverReservation);
+    }
+}
+```
+
+**Example**:
+```
+Path: A(pos 0, coordinator) → B(pos 1) → C(pos 2) → D(pos 3, receiver)
+
+After calculateFlows(2010):
+flows[0] = (2010, 1001)  // A→B edge
+flows[1] = (2000, 1001)  // B→C edge (after commission at B = 10)
+flows[2] = (100, 2002)   // C→D edge (after exchange at C: 1001→2002 at rate 0.05)
+
+Configuration stored:
+Node B (intermediate at pos 1):
+  - Incoming: PathReservation(pathID, 2010, 1001) from flows[0]
+  - Outgoing: PathReservation(pathID, 2000, 1001) from flows[1]
+
+Node C (intermediate at pos 2):
+  - Incoming: PathReservation(pathID, 2000, 1001) from flows[1]
+  - Outgoing: PathReservation(pathID, 100, 2002) from flows[2]
+
+Node D (receiver at pos 3):
+  - Incoming: PathReservation(pathID, 100, 2002) from flows[2]
+```
+
+**Key Requirements**:
+1. Must validate `flows` is non-empty before processing
+2. Must validate `flows.size() == mIntermediateNodesStates.size() + 1`
+3. Each intermediate node receives TWO PathReservations (incoming + outgoing)
+4. Receiver receives ONE PathReservation (incoming only)
+5. Each PathReservation uses correct amount and equivalent from flows vector
+6. Throw ValueError with descriptive message on validation failures
+
+**Error Handling**:
+All call sites of addFinalConfigurationOnPath() must catch ValueError and call reject() with appropriate message:
+```cpp
+try {
+    addFinalConfigurationOnPath(pathID, pathStats);
+} catch (const ValueError& e) {
+    error() << "Failed to add final configuration: " << e.what();
+    return reject("Internal payment error: flow calculation mismatch");
+}
+```
+
 ### Error Handling Specifications
 
 #### Error Conditions
@@ -706,8 +935,16 @@ bool checkReservationsDirections() const {
 ### Testing Approach (Unit-Only)
 - All testing is unit-only (no integration/E2E tests)
 - Tests are built and executed exclusively in `build-tests`
-- No Docker usage; mock all external dependencies
-- Provide mock data for both SQLite and PostgreSQL where applicable
+- No Docker usage; use real objects following ExchangePathsManagerTest pattern
+- Use TestEnvironment helper classes for consistent test setup
+- Test files located in `tests/unit/` subdirectories (transactions/, paths/, payments/)
+
+### Testing Best Practices (Task 06-08)
+- **Real Objects Over Mocks**: Use real instances of ContractorsManager, StorageHandlerSQLite, etc. instead of mocks
+- **TestEnvironment Helpers**: Create helper classes for test initialization (following ExchangePathsManagerTest.cpp pattern)
+- **Exception Testing**: Test that methods throw correct exceptions (ValueError, NotFoundError) using EXPECT_THROW
+- **Edge Case Coverage**: Test empty vectors, boundary values (0, max values), null/invalid inputs
+- **Parameterized Tests**: Use for testing different equivalent combinations to reduce code duplication
 
 #### Unit Tests: New Components
 
@@ -1201,11 +1438,94 @@ Detailed API specifications will be provided in task-level documentation for all
 
 ---
 
+## Tasks
+
+### Task 06-13: FinalPathExchangeConfigurationMessage Implementation
+
+**Description**: Create new message type `FinalPathExchangeConfigurationMessage` for sending multi-equivalent path configuration to intermediate nodes, replacing `FinalPathConfigurationMessage` in exchange payment transactions.
+
+**Background**: Current `FinalPathConfigurationMessage` inherits from `RequestMessage` which contains a single amount value for all reservations. In multi-equivalent exchange payments, each intermediate node needs both incoming and outgoing reservation information with their respective equivalents, as amounts and equivalents can differ due to commissions and exchange rates.
+
+**Requirements**:
+
+1. **Create FinalPathExchangeConfigurationMessage**:
+   - Inherits from `TransactionMessage` (not `RequestMessage`)
+   - Fields:
+     - `PathID mPathID`
+     - `TrustLineAmount mIncomingAmount`
+     - `SerializedEquivalent mIncomingEquivalent`
+     - `TrustLineAmount mOutgoingAmount`
+     - `SerializedEquivalent mOutgoingEquivalent`
+   - Message Type ID: `Payments_FinalPathExchangeConfiguration = 215`
+   - Location: `src/core/network/messages/payments/FinalPathExchangeConfigurationMessage.h` and `.cpp`
+
+2. **Add Direction field to PathReservation structure**:
+   - Add `enum Direction { Incoming, Outgoing }` to PathReservation
+   - Add `Direction direction` field
+   - Update all PathReservation creation sites to include direction
+   - Location: `src/core/transactions/transactions/regular/payments/base/PathReservation.h`
+
+3. **Update CoordinatorExchangePaymentTransaction::sendFinalPathConfiguration**:
+   - For each intermediate node, retrieve PathReservation vector from `mNodesFinalAmountsConfiguration`
+   - Validate exactly 2 reservations exist for each node (incoming + outgoing)
+   - Determine equivalents from `pathStats->mPath.equivalents` based on node position
+   - Send `FinalPathExchangeConfigurationMessage` with:
+     - `mIncomingAmount` and `mIncomingEquivalent` from incoming reservation
+     - `mOutgoingAmount` and `mOutgoingEquivalent` from outgoing reservation
+   - Add detailed logging for debugging
+
+4. **Update CoordinatorExchangePaymentTransaction::dropReservationsOnPath**:
+   - Send `FinalPathExchangeConfigurationMessage` with zero amounts instead of `FinalPathConfigurationMessage`
+   - Set `mIncomingAmount = TrustLine::kZeroAmount()`
+   - Set `mOutgoingAmount = TrustLine::kZeroAmount()`
+   - Determine equivalents from `pathStats->mPath.equivalents` based on node position
+
+5. **Update IntermediateNodeExchangePaymentTransaction::runFinalPathConfigurationProcessingStage**:
+   - Change expected message type from `Message::Payments_FinalPathConfiguration` to `Message::Payments_FinalPathExchangeConfiguration`
+   - Parse `FinalPathExchangeConfigurationMessage` instead of `FinalPathConfigurationMessage`
+   - Extract both incoming and outgoing amounts with equivalents
+   - Call `shortageReservationsOnPath` appropriately with new message data
+
+6. **Add Message Type Enum**:
+   - Add `Payments_FinalPathExchangeConfiguration = 215` to `Message::MessageType` enum
+   - Location: `src/core/network/messages/Message.hpp`
+
+7. **Integrate with MessageParser**:
+   - Add case for `Message::Payments_FinalPathExchangeConfiguration`
+   - Return `messageCollected<FinalPathExchangeConfigurationMessage>(buffer)`
+   - Location: `src/core/network/communicator/internal/incoming/MessageParser.cpp`
+
+8. **Integrate with TransactionsScheduler**:
+   - Add `message->typeID() == Message::Payments_FinalPathExchangeConfiguration` to relevant condition checks
+   - Location: `src/core/transactions/scheduler/TransactionsScheduler.cpp`
+
+**Acceptance Criteria**:
+- FinalPathExchangeConfigurationMessage successfully created and compiles
+- PathReservation contains direction field and all creation sites updated
+- sendFinalPathConfiguration sends new message with correct incoming/outgoing data
+- dropReservationsOnPath sends new message with zero amounts
+- IntermediateNodeExchangePaymentTransaction processes new message correctly
+- MessageParser and TransactionsScheduler properly handle new message type
+- Project builds successfully in debug mode with specified CMAKE flags
+- No compilation errors or warnings related to changes
+
+**Testing Plan**:
+- Manual verification that build succeeds
+- Code review to verify all components are properly integrated
+- Future unit tests will validate message parsing and transaction behavior
+
+**Priority**: High
+
+**Dependencies**: Completed tasks 06-01 through 06-09
+
+---
+
 **Document History**
 | Version | Date | Author | Changes | Iteration |
 |---------|------|--------|---------|-----------|
 | 1.0 | 2025-10-06 | Claude Code | Initial draft for exchange payment with commissions | Phase 1 |
 | 1.1 | 2025-10-06 | Claude Code | Added CreditUsageExchangeCommand format, examples, and ResultsInterface response specification | Phase 1 |
+| 1.2 | 2025-10-16 | Claude Code | Added Task 06-13: FinalPathExchangeConfigurationMessage Implementation | Phase 1 |
 
 **Related Documents**
 - **Master Project Vision**: vTCP Decentralized Payment Network

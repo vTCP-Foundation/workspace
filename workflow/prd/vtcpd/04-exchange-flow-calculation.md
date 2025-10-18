@@ -627,8 +627,8 @@ for (auto index : ordered_indices) {
     info() << "Optimal flow path: " << formatDetailedPath(path_result);
 }
 
-// Store optimal paths for potential future use (caching, analytics, alternative solutions)
-mOptimalPathResults[contractorID] = optimal_paths;
+// Paths are cached in ExchangePathsManager for future estimation queries
+// (see path caching logic in Step 4 below)
 
 info() << "Total optimal receivable amount for contractor " << contractorID 
        << ": " << objective->Value() << " in equivalent " << mEquivalent
@@ -881,8 +881,7 @@ endif()
   - `applyCustomLogic()`: Performs OR-Tools Linear Programming optimization
 - **Output Storage**:
   - `mMaxFlows` map (ContractorID → maximum receivable amount): Primary optimization results
-  - `mOptimalPathResults` map (ContractorID → vector<OptimalPathResult>): Detailed path information for future use
-  - Complete path enumeration and optimization data preserved for analytics
+  - Optimal paths are cached in `ExchangePathsManager` for future estimation queries (see Integration section)
 - **Result Interface**: Returns results through existing result interface pattern
 - **Future Extensions**: Stored path information enables advanced analytics, alternative solutions, path ranking
 

@@ -47,25 +47,54 @@ These tests validate the foundation layer for multi-equivalent payment support.
 21. Test multiple reservations with different equivalents on same trust line
 
 ## Definition of Done
-- [x] All PathReservation tests implemented and passing (2 tests)
-- [x] All OptimalPathResult tests implemented and passing (20+ tests)
-- [x] All ExchangePath tests implemented and passing (5 tests)
-- [x] All AmountReservation tests implemented and passing (4 tests)
-- [x] All AmountReservationsHandler tests implemented and passing (9 tests)
-- [x] All tests compile without errors
-- [x] All tests pass in build-tests
-- [x] Test coverage adequate for Simple/Moderate complexity components
-- [x] Mock data provided for both SQLite and PostgreSQL where applicable
+- [ ] All PathReservation tests implemented and passing (2 tests)
+- [ ] All OptimalPathResult tests implemented and passing (20+ tests)
+- [ ] All ExchangePath tests implemented and passing (5 tests)
+- [ ] All AmountReservation tests implemented and passing (4 tests)
+- [ ] All AmountReservationsHandler tests implemented and passing (9 tests)
+- [ ] All tests compile without errors
+- [ ] All tests pass in build-tests
+- [ ] Test coverage adequate for Simple/Moderate complexity components
+- [ ] Test files added to tests/unit/CMakeLists.txt
+- [ ] Real objects used instead of mocks (following ExchangePathsManagerTest pattern)
+- [ ] Exception handling tested (ValueError, NotFoundError)
+- [ ] Edge cases covered (empty vectors, null values, boundary conditions)
 
 # Implementation Plan
 
+## Test Strategy and Best Practices
+
+### Use Real Objects Instead of Mocks
+- Follow the pattern from ExchangePathsManagerTest.cpp
+- Create TestEnvironment helper classes where needed
+- Use real instances of ContractorsManager, StorageHandlerSQLite, etc.
+- Only mock external third-party services (none in this task)
+
+### Exception Testing
+- Test that methods throw correct exceptions (ValueError, NotFoundError)
+- Use EXPECT_THROW and ASSERT_THROW from GTest
+- Verify exception messages where applicable
+
+### Edge Case Coverage
+- Test empty vectors and collections
+- Test boundary values (0, max values)
+- Test null/invalid inputs where applicable
+- Test concurrent operations where relevant
+
+### Parameterized Tests
+- Use for AmountReservationsHandler to test different equivalent combinations
+- Reduces code duplication
+- Improves test coverage
+
 ## Test File Structure
 Create test files in appropriate test directory:
-- `tests/core/transactions/TestPathReservation.cpp`
-- `tests/core/paths/TestOptimalPathResult.cpp`
-- `tests/core/paths/TestExchangePath.cpp`
-- `tests/core/payments/reservations/TestAmountReservation.cpp`
-- `tests/core/payments/reservations/TestAmountReservationsHandler.cpp`
+- `tests/unit/transactions/TestPathReservation.cpp`
+- `tests/unit/paths/TestOptimalPathResult.cpp`
+- `tests/unit/paths/TestExchangePath.cpp`
+- `tests/unit/payments/TestAmountReservation.cpp`
+- `tests/unit/payments/TestAmountReservationsHandler.cpp`
+
+All test files must be added to `tests/unit/CMakeLists.txt`
 
 ## Test Category 1: PathReservation (2 tests)
 

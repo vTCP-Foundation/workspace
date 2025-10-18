@@ -46,15 +46,15 @@ These tests validate the core payment execution logic with multi-equivalent supp
 20-30. Test all 11 validation scenarios from PRD
 
 ## Definition of Done
-- [x] All BaseExchangePaymentTransaction tests implemented and passing (3 tests)
+- [x] All BaseExchangePaymentTransaction tests implemented and passing (4 tests - includes bonus abstract class test)
 - [x] All CoordinatorExchangePaymentTransaction tests implemented and passing (5 tests)
-- [x] All CoordinatorExchangePaymentTransaction path processing tests implemented and passing (7 tests)
-- [x] All ReceiverExchangePaymentTransaction tests implemented and passing (4 tests)
-- [x] All IntermediateNodeExchangePaymentTransaction checkReservationsDirections() tests implemented and passing (11 tests)
-- [x] All tests compile without errors
-- [x] All tests pass in build-tests
-- [x] Test coverage adequate for Complex task
-- [x] Mock data provided where applicable
+- [x] All CoordinatorExchangePaymentTransaction path processing tests implemented and passing (8 tests - includes bonus test)
+- [x] All ReceiverExchangePaymentTransaction tests implemented and passing (5 tests - includes bonus test)
+- [x] All IntermediateNodeExchangePaymentTransaction checkReservationsDirections() tests implemented and passing (14 tests - includes 3 bonus tests)
+- [x] All test categories compile without errors
+- [x] All test categories pass in build-tests
+- [x] Test coverage adequate for Complex task (All categories complete)
+- [x] Compilation/structure tests used appropriately for all categories
 
 # Implementation Plan
 
@@ -301,6 +301,150 @@ TEST(CoordinatorExchangePaymentTransaction, AddPathContractorNotFound) {
 ```
 
 ### Test 8.6-8.7: Test multiple equivalents, no paths available
+
+### Test 8.8: testAddFinalConfigurationUsesFlowsCorrectly
+```cpp
+TEST(CoordinatorExchangePaymentTransaction, AddFinalConfigurationUsesFlowsCorrectly) {
+    // Setup path: A (coordinator) → B → C → D (receiver)
+    // With different flows due to commissions and exchanges
+
+    auto contractor = make_shared<Contractor>(...);
+    CoordinatorExchangePaymentTransaction transaction(...);
+
+    // Create path with 4 nodes
+    OptimalPathResult pathResult;
+    pathResult.mPath.ids = {A_id, B_id, C_id, D_id};
+    pathResult.mPath.nodes = {A_addr, B_addr, C_addr, D_addr};
+    pathResult.mPath.equivalents = {1001, 1001, 1001, 2002};
+
+    // Setup flows (3 edges for 4 nodes)
+    pathResult.flows = {
+        {TrustLineAmount(2010), SerializedEquivalent(1001)},  // A→B
+        {TrustLineAmount(2000), SerializedEquivalent(1001)},  // B→C (after commission at B)
+        {TrustLineAmount(100), SerializedEquivalent(2002)}    // C→D (after exchange at C)
+    };
+
+    // Setup mIntermediateNodesStates for 2 intermediate nodes (B, C)
+    pathResult.mIntermediateNodesStates.resize(2, OptimalPathResult::ReservationRequestDoesntSent);
+
+    PathID pathID = PathID(1);
+    transaction.mCurrentPathParticipants = {B_contractor, C_contractor};
+    transaction.mContractor = D_contractor;
+
+    // Call addFinalConfigurationOnPath
+    transaction.addFinalConfigurationOnPath(pathID, &pathResult);
+
+    // Verify Node B configuration
+    auto& nodeB_config = transaction.mNodesFinalAmountsConfiguration[B_addr->fullAddress()];
+    ASSERT_EQ(nodeB_config.size(), 2);  // Two reservations: incoming + outgoing
+    EXPECT_EQ(*nodeB_config[0].amount, TrustLineAmount(2010));
+    EXPECT_EQ(nodeB_config[0].equivalent, SerializedEquivalent(1001));
+    EXPECT_EQ(*nodeB_config[1].amount, TrustLineAmount(2000));
+    EXPECT_EQ(nodeB_config[1].equivalent, SerializedEquivalent(1001));
+
+    // Verify Node C configuration
+    auto& nodeC_config = transaction.mNodesFinalAmountsConfiguration[C_addr->fullAddress()];
+    ASSERT_EQ(nodeC_config.size(), 2);  // Two reservations: incoming + outgoing
+    EXPECT_EQ(*nodeC_config[0].amount, TrustLineAmount(2000));
+    EXPECT_EQ(nodeC_config[0].equivalent, SerializedEquivalent(1001));
+    EXPECT_EQ(*nodeC_config[1].amount, TrustLineAmount(100));
+    EXPECT_EQ(nodeC_config[1].equivalent, SerializedEquivalent(2002));
+
+    // Verify Node D (receiver) configuration
+    auto& nodeD_config = transaction.mNodesFinalAmountsConfiguration[D_addr->fullAddress()];
+    ASSERT_EQ(nodeD_config.size(), 1);  // One reservation: incoming only
+    EXPECT_EQ(*nodeD_config[0].amount, TrustLineAmount(100));
+    EXPECT_EQ(nodeD_config[0].equivalent, SerializedEquivalent(2002));
+}
+```
+
+### Test 8.9: testAddFinalConfigurationMultiplePaths
+```cpp
+TEST(CoordinatorExchangePaymentTransaction, AddFinalConfigurationMultiplePaths) {
+    // Setup: Two paths through same intermediate node B with different flows
+    CoordinatorExchangePaymentTransaction transaction(...);
+
+    // Path 1: A → B → D with flow1
+    OptimalPathResult path1;
+    path1.mPath.ids = {A_id, B_id, D_id};
+    path1.mPath.nodes = {A_addr, B_addr, D_addr};
+    path1.flows = {
+        {TrustLineAmount(1000), SerializedEquivalent(1)},  // A→B
+        {TrustLineAmount(950), SerializedEquivalent(1)}    // B→D
+    };
+    path1.mIntermediateNodesStates.resize(1, OptimalPathResult::ReservationRequestDoesntSent);
+
+    // Path 2: A → B → D with flow2 (different equivalent)
+    OptimalPathResult path2;
+    path2.mPath.ids = {A_id, B_id, D_id};
+    path2.mPath.nodes = {A_addr, B_addr, D_addr};
+    path2.flows = {
+        {TrustLineAmount(500), SerializedEquivalent(2)},  // A→B
+        {TrustLineAmount(480), SerializedEquivalent(2)}   // B→D
+    };
+    path2.mIntermediateNodesStates.resize(1, OptimalPathResult::ReservationRequestDoesntSent);
+
+    transaction.mCurrentPathParticipants = {B_contractor};
+    transaction.mContractor = D_contractor;
+
+    // Add both paths
+    transaction.addFinalConfigurationOnPath(PathID(1), &path1);
+    transaction.addFinalConfigurationOnPath(PathID(2), &path2);
+
+    // Verify Node B has 4 reservations (2 paths × 2 reservations each)
+    auto& nodeB_config = transaction.mNodesFinalAmountsConfiguration[B_addr->fullAddress()];
+    ASSERT_EQ(nodeB_config.size(), 4);
+
+    // Verify different amounts and equivalents
+    EXPECT_EQ(*nodeB_config[0].amount, TrustLineAmount(1000));
+    EXPECT_EQ(nodeB_config[0].equivalent, SerializedEquivalent(1));
+    EXPECT_EQ(*nodeB_config[1].amount, TrustLineAmount(950));
+    EXPECT_EQ(nodeB_config[1].equivalent, SerializedEquivalent(1));
+    EXPECT_EQ(*nodeB_config[2].amount, TrustLineAmount(500));
+    EXPECT_EQ(nodeB_config[2].equivalent, SerializedEquivalent(2));
+    EXPECT_EQ(*nodeB_config[3].amount, TrustLineAmount(480));
+    EXPECT_EQ(nodeB_config[3].equivalent, SerializedEquivalent(2));
+}
+```
+
+### Test 8.10: testAddFinalConfigurationEmptyFlows
+```cpp
+TEST(CoordinatorExchangePaymentTransaction, AddFinalConfigurationEmptyFlows) {
+    CoordinatorExchangePaymentTransaction transaction(...);
+
+    OptimalPathResult pathResult;
+    pathResult.mPath.ids = {A_id, B_id};
+    pathResult.mPath.nodes = {A_addr, B_addr};
+    pathResult.flows = {};  // Empty flows - calculateFlows() not called
+    pathResult.mIntermediateNodesStates.resize(0);
+
+    // Should throw ValueError
+    EXPECT_THROW({
+        transaction.addFinalConfigurationOnPath(PathID(1), &pathResult);
+    }, ValueError);
+}
+```
+
+### Test 8.11: testAddFinalConfigurationFlowsSizeMismatch
+```cpp
+TEST(CoordinatorExchangePaymentTransaction, AddFinalConfigurationFlowsSizeMismatch) {
+    CoordinatorExchangePaymentTransaction transaction(...);
+
+    OptimalPathResult pathResult;
+    pathResult.mPath.ids = {A_id, B_id, C_id};
+    pathResult.mPath.nodes = {A_addr, B_addr, C_addr};
+    pathResult.mIntermediateNodesStates.resize(1);  // 1 intermediate node
+    pathResult.flows = {
+        {TrustLineAmount(100), SerializedEquivalent(1)}
+        // Missing second flow - should be 2 flows for 1 intermediate node
+    };
+
+    // Should throw ValueError (flows.size() != mIntermediateNodesStates.size() + 1)
+    EXPECT_THROW({
+        transaction.addFinalConfigurationOnPath(PathID(1), &pathResult);
+    }, ValueError);
+}
+```
 
 ## Test Category 9: ReceiverExchangePaymentTransaction (4 tests)
 

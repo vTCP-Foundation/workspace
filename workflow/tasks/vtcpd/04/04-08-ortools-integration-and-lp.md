@@ -10,7 +10,7 @@ Integrate OR-Tools (LinearSolver), build an LP model per PRD with a path-based a
 - CMake: `find_package(ortools REQUIRED)`, link `ortools::ortools`.
 - Node startup verification: check OR-Tools availability and minimum version (>= 9.0), terminate with error if unavailable or insufficient version.
 - LP solver: create `MPSolver` (GLOP or equivalent), path variables, objective, constraints per PRD.
-- Implement stages: path enumeration, LP build, optimization, results stored in `mMaxFlows` and `mOptimalPathResults`.
+- Implement stages: path enumeration, LP build, optimization, results stored in `mMaxFlows` and cached in `ExchangePathsManager`.
 - Path logs in the new specified format with explicit commission entries: `F(...)`, `E(...)`, and `C(node: …; commission: …; flow after: …; eq: …)`.
 - Deterministic ordering of materialized paths: sort by effective exchange rate (descending) then by hop count (ascending) before logging/applying commissions.
 - Implement runtime helper/registry ensuring each transit commission is charged at most once across the ordered paths and recorded in `OptimalPathResult::commission_events`.
@@ -27,19 +27,19 @@ Integrate OR-Tools (LinearSolver), build an LP model per PRD with a path-based a
   - Sender balance per equivalent: total outflow per payer equivalent ≤ available balance in that equivalent.
   - Non-negativity: all flow variables ≥ 0.
 - Solver status handling: map statuses to actions
-  - OPTIMAL → store `objective->Value()` in `mMaxFlows[contractorID]`, extract per-path flows into `mOptimalPathResults[contractorID]`.
+  - OPTIMAL → store `objective->Value()` in `mMaxFlows[contractorID]`, cache optimal paths in `ExchangePathsManager`.
   - INFEASIBLE → set zero result for contractor and log warning.
   - UNBOUNDED → throw runtime error (invalid model constraints).
   - ABNORMAL → throw runtime error (numerical issues).
   - Other → throw runtime error with status code.
-- Results storage: primary map `mMaxFlows` (ContractorID → `TrustLineAmount`) and detailed `mOptimalPathResults` (ContractorID → `vector<OptimalPathResult>`).
+- Results storage: primary map `mMaxFlows` (ContractorID → `TrustLineAmount`) and optimal paths cached in `ExchangePathsManager`.
 
 ## PRD prerequisites (dependencies to be present; implement here only if included in scope)
 - Extended message protocol: all max-flow messages include `vector<SerializedEquivalent> exchangeEquivalents` (empty vector keeps legacy behavior).
   - Affected messages: `MaxFlowCalculationSourceFstLevelMessage`, `MaxFlowCalculationSourceSndLevelMessage`, `MaxFlowCalculationTargetFstLevelMessage`, `MaxFlowCalculationTargetSndLevelMessage`, base `MaxFlowCalculationMessage`.
 - New command and transactions for exchanges:
   - `InitiateMaxFlowExchangeCalculationCommand` (validates that `exchangeEquivalents.size() ≤ 5`, else error 401 `responseProtocolError`).
-  - `InitiateMaxFlowExchangeCalculationTransaction` (LP optimization entry point; `applyCustomLogic()` builds and solves LP; stores results in `mMaxFlows`/`mOptimalPathResults`).
+  - `InitiateMaxFlowExchangeCalculationTransaction` (LP optimization entry point; `applyCustomLogic()` delegates to `ExchangePathsManager::calculateMaxFlow()`; stores results in `mMaxFlows` and caches paths).
   - `CollectTopologyForExchangeTransaction` and `ReceiveMaxFlowCalculationForExchangeOnTargetTransaction` (topology and rate-aware collection/forwarding).
 - Exchange rates messaging and tails:
   - `ExchangeRatesMessage` carrying `vector<ExchangeRate>`.
@@ -85,7 +85,7 @@ Additional unit tests aligning with PRD (implement here if in scope; otherwise e
 - Path enumeration yields `vector<ExchangePath>`; create one variable per path with upper bound = path min capacity.
 - Objective: maximize Σ(flow_after_commission_path_i × effective_exchange_rate_i), where `flow_after_commission_path_i = max(0, flow_path_i - C_path_i)`.
 - Constraints: see full list above; sender balance constraints are created per payer equivalent and include coefficients only for paths starting in that equivalent.
-- Solution extraction: for each path variable `x_i`, if `x_i.solution_value() > ε`, order paths, apply the commission registry to obtain `flow_after_commission`, compute received amount = `flow_after_commission * effective_rate_i`, and persist both raw/adjusted values plus commission events in `mOptimalPathResults`.
+- Solution extraction: for each path variable `x_i`, if `x_i.solution_value() > ε`, order paths, apply the commission registry to obtain `flow_after_commission`, compute received amount = `flow_after_commission * effective_rate_i`, and cache optimal paths in `ExchangePathsManager`.
 
 ## CMake integration pattern (reference)
 ```cmake

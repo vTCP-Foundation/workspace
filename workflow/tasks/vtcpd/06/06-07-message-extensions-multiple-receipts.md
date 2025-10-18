@@ -12,6 +12,16 @@ Changes include:
 2. Updating isReceiptContains() to check vector size
 3. Updating serialization/deserialization to handle receipt vector
 4. Maintaining backward compatibility for single-equivalent transactions
+5. **IntermediateNodeExchangePaymentTransaction**: Update receipt generation logic (lines 970-1039) to:
+   - Group outgoing reservations by equivalent for each participant
+   - For each equivalent: use appropriate TrustLinesManager, calculate amount sum, create signature
+   - Send vector of (equivalent, signature) pairs in TransactionPublicKeyHashMessage
+   - Even with single equivalent, send as vector with one element
+6. **CoordinatorExchangePaymentTransaction**: Update receipt generation logic (lines 624-724) to:
+   - Group outgoing reservations by equivalent for each participant
+   - For each equivalent: use appropriate TrustLinesManager, calculate amount sum, create signature
+   - Send vector of (equivalent, signature) pairs in FinalAmountsConfigurationMessage
+   - Even with single equivalent, send as vector with one element
 
 # Requirements and DOD
 
@@ -44,6 +54,55 @@ Changes include:
 16. Empty signature case: old constructor creates empty vector
 17. Serialization format handles both empty and non-empty vectors
 
+### IntermediateNodeExchangePaymentTransaction Updates
+18. In runCheckObservingBlockNumber() (lines 970-1039), replace single receipt logic with:
+    - Group outgoing reservations by equivalent for each participant
+    - For each equivalent group: select TrustLinesManager using trustLinesManager(equivalent)
+    - Calculate sum of amounts for each equivalent group
+    - Create separate signature for each equivalent using appropriate TrustLinesManager
+    - Collect all (equivalent, signature) pairs into vector
+19. Send receipts using new TransactionPublicKeyHashMessage constructor with signatures vector
+20. Even single receipt sent as vector with one element
+
+### CoordinatorExchangePaymentTransaction Updates
+21. In sendFinalAmountsConfigurationToAllParticipants() (lines 624-724), replace single receipt logic with:
+    - Group outgoing reservations by equivalent for each participant
+    - For each equivalent group: select TrustLinesManager using trustLinesManager(equivalent)
+    - Calculate sum of amounts for each equivalent group
+    - Create separate signature for each equivalent using appropriate TrustLinesManager
+    - Collect all (equivalent, signature) pairs into vector
+22. Send receipts using new FinalAmountsConfigurationMessage constructor with signatures vector
+23. Even single receipt sent as vector with one element
+
+### IntermediateNodeExchangePaymentTransaction Receipt Verification Updates
+24. In runFinalReservationsCoordinatorConfirmation(), replace single receipt verification with:
+    - Iterate through kMessage->signatures() vector
+    - For each (equivalent, signature) pair: group incoming reservations by equivalent
+    - Calculate total incoming amount for each equivalent using totalReservedIncomingAmountToNode(coordinatorID, equivalent)
+    - Get appropriate TrustLinesManager using trustLinesManager(equivalent)
+    - Get keychain from TrustLinesManager for coordinator trust line
+    - Verify signature against serialized receipt data for that equivalent
+    - All receipts must verify successfully for transaction to proceed
+25. In runFinalReservationsNeighborConfirmation(), replace single receipt verification with:
+    - Iterate through kMessage->signatures() vector
+    - For each (equivalent, signature) pair: group incoming reservations by equivalent
+    - Calculate total incoming amount for each equivalent using totalReservedIncomingAmountToNode(previousNeighbor, equivalent)
+    - Get appropriate TrustLinesManager using trustLinesManager(equivalent)
+    - Get keychain from TrustLinesManager for neighbor trust line
+    - Verify signature against serialized receipt data for that equivalent
+    - All receipts must verify successfully
+
+### ReceiverExchangePaymentTransaction Receipt Verification Updates
+26. In runFinalReservationsCoordinatorConfirmation(), replace single receipt verification with:
+    - Iterate through kMessage->signatures() vector
+    - For each (equivalent, signature) pair: group incoming reservations by equivalent
+    - Calculate total incoming amount for each equivalent using totalReservedIncomingAmountToNode(coordinatorID, equivalent)
+    - Get appropriate TrustLinesManager using trustLinesManager(equivalent)
+    - Get keychain from TrustLinesManager for coordinator trust line
+    - Verify signature against serialized receipt data for that equivalent
+    - All receipts must verify successfully
+27. In runFinalReservationsNeighborConfirmation() (if exists), apply same pattern as IntermediateNodeExchangePaymentTransaction
+
 ## Definition of Done
 - [x] FinalAmountsConfigurationMessage: mIsReceiptContains and mSignature removed
 - [x] FinalAmountsConfigurationMessage: mSignatures vector added
@@ -58,7 +117,21 @@ Changes include:
 - [x] TransactionPublicKeyHashMessage: Two constructors (with vector, with single signature)
 - [x] TransactionPublicKeyHashMessage: Serialization/deserialization works
 - [x] Backward compatibility maintained for old transactions
-- [x] Code compiles without errors
+- [x] IntermediateNodeExchangePaymentTransaction: Outgoing reservations grouped by equivalent
+- [x] IntermediateNodeExchangePaymentTransaction: Separate receipt created for each equivalent
+- [x] IntermediateNodeExchangePaymentTransaction: Vector of receipts sent in TransactionPublicKeyHashMessage
+- [x] IntermediateNodeExchangePaymentTransaction: Correct TrustLinesManager used for each equivalent
+- [x] CoordinatorExchangePaymentTransaction: Outgoing reservations grouped by equivalent
+- [x] CoordinatorExchangePaymentTransaction: Separate receipt created for each equivalent
+- [x] CoordinatorExchangePaymentTransaction: Vector of receipts sent in FinalAmountsConfigurationMessage
+- [x] CoordinatorExchangePaymentTransaction: Correct TrustLinesManager used for each equivalent
+- [ ] IntermediateNodeExchangePaymentTransaction: runFinalReservationsCoordinatorConfirmation verifies all receipts
+- [ ] IntermediateNodeExchangePaymentTransaction: runFinalReservationsNeighborConfirmation verifies all receipts
+- [ ] IntermediateNodeExchangePaymentTransaction: Correct TrustLinesManager used for verification per equivalent
+- [ ] ReceiverExchangePaymentTransaction: runFinalReservationsCoordinatorConfirmation verifies all receipts
+- [ ] ReceiverExchangePaymentTransaction: runFinalReservationsNeighborConfirmation verifies all receipts (if exists)
+- [ ] ReceiverExchangePaymentTransaction: Correct TrustLinesManager used for verification per equivalent
+- [ ] Code compiles without errors
 
 # Implementation Plan
 
