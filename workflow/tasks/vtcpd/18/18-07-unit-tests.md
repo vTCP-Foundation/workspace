@@ -8,6 +8,7 @@
 - [Previous task: 18-04-audit-source-transaction](18-04-audit-source-transaction.md)
 - [Previous task: 18-05-audit-target-transaction](18-05-audit-target-transaction.md)
 - [Previous task: 18-06-other-audit-transactions](18-06-other-audit-transactions.md)
+- [Previous task: 18-08-audit-submit-claim-votes](18-08-audit-submit-claim-votes.md)
 
 # Description
 
@@ -80,6 +81,11 @@ Unit tests focus on individual component behavior in isolation, using mocks wher
 39. Test signature payload includes transaction list hash
 40. Test signature payload hash is in correct position (after balance, before equivalentRegistryAddress)
 
+### SubmitClaimVotes Submission Tests
+41. Test audit success path triggers SubmitClaimVotes for locally finalized but counterparty-not-finalized transactions
+42. Test SubmitClaimVotes is not sent when list is empty
+43. Test SubmitClaimVotes failures do not affect audit completion
+
 ## Definition of Done
 
 - [ ] All AuditMessage tests implemented and passing
@@ -90,6 +96,7 @@ Unit tests focus on individual component behavior in isolation, using mocks wher
 - [ ] All PostgreSQL receipt handler integration tests implemented and passing
 - [ ] All TrustLinesManager tests implemented and passing
 - [ ] Audit signature payload tests implemented and passing
+- [ ] SubmitClaimVotes submission tests implemented and passing
 - [ ] Tests follow existing test patterns in codebase
 - [ ] Tests are included in CMake build
 - [ ] All tests pass

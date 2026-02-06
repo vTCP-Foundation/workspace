@@ -4,12 +4,12 @@
 - **Project Name**: VTCPD Audit Mechanism Based on Finalized Transactions
 - **PRD ID**: 18
 - **Phase/Iteration**: Phase 18, Trust Line Audit Enhancement
-- **Document Version**: 1.0
+- **Document Version**: 1.1
 - **Date**: 2026-01-19
 - **Author(s)**: AI Development Assistant
 - **Stakeholders**: Core Development Team
-- **PRD Status**: 1.1 - PRD file created
-- **Last Status Update**: 2026-01-19
+- **PRD Status**: 1.2 - Updated with observer vote submission on audit completion
+- **Last Status Update**: 2026-01-27
 - **Previous PRD**: [PRD-17: Block Number Cache](17-block-number-cache.md)
 - **Related Documents**:
   - [Payment Protocol](../../architecture/vtcpd/protocols/payment-protocol.md)
@@ -22,6 +22,7 @@
 - **Current project state**: The audit mechanism currently includes all payment receipts regardless of whether their corresponding payment transactions have been finalized. This can lead to trust line state inconsistencies when transactions are still pending observer confirmation or get rejected.
 - **This iteration's focus**: Modify the audit mechanism to only include receipts from finalized (committed) transactions, with both parties agreeing on the exact set of transactions included in each audit.
 - **Connection to overall vision**: This enhancement improves trust line reliability and prevents conflicts caused by including non-finalized transaction data in audits.
+- **Additional safeguard**: If one node has finalized transactions that the counterparty hasn't, submit the final set of participant signatures to the observer before completing the audit.
 
 ## Iteration Context
 
@@ -110,6 +111,12 @@ The current audit mechanism has a critical flaw:
    - Correct `mTotalIncomingReceiptsAmount` / `mTotalOutgoingReceiptsAmount` when excluding transactions
    - Preserve unrealized receipt amounts instead of resetting to zero
    - Add example in PRD to clarify balance and totals recomputation
+
+7. **Observer Vote Submission for Asymmetric Finalization**
+   - Before successful audit completion in all 4 audit transactions, detect transactions finalized locally but not on the counterparty
+   - For each such transaction, submit the final set of participant signatures to the observer via `SubmitClaimVotesRpcRequest`
+   - Requests are fire-and-forget (no waiting for responses)
+   - Requests must be sent before `trustLineActionSignal`
 
 #### Modifications to Existing Features
 
@@ -270,6 +277,23 @@ This implementation provides foundation for:
    - **Priority**: High
    - **Dependencies**: Receipt amount tracking logic
 
+7. **Observer Vote Submission for Asymmetric Finalization**
+   - **Description**: If local node has finalized transactions that are not finalized on the counterparty side, submit the final set of participant signatures to the observer before completing the audit
+   - **User Story**: As a node, I want to push finalized transaction signatures to the observer when the counterparty is lagging, so that both nodes converge on finalized state
+   - **Rationale**: Reduces desynchronization window and speeds up observer confirmation
+   - **Builds Upon**: PaymentParticipantsVotesHandler, SubmitClaimVotes RPC
+   - **Acceptance Criteria**:
+     - For each audit transaction (AuditSource, AuditTarget, SetOutgoing, CloseIncoming), before successful completion:
+       - Identify transactions finalized locally but not finalized on the counterparty
+       - For each identified transaction, load participant signatures from `paymentParticipantsVotesHandler`
+       - Use `maximal_claiming_block_number` for the transaction when building `SubmitClaimVotesRpcRequest`
+       - Sign submission with `Keystore::signPaymentTransaction` and include own payment public key
+       - Send `sendRpcRequest(make_shared<SubmitClaimVotesRpcRequest>(...))` without waiting for responses
+     - If signatures or metadata are missing, log a warning and continue (audit still completes)
+     - Requests are sent before `trustLineActionSignal`
+   - **Priority**: Medium
+   - **Dependencies**: Audit reconciliation logic, payment votes storage
+
 ### Non-Functional Requirements
 
 #### Performance
@@ -299,6 +323,7 @@ This implementation provides foundation for:
   - Filter receipts by finalization status
   - Exchange and verify transaction lists
   - Preserve unrealized receipt amounts
+  - Submit participant signatures to observer for locally finalized transactions missing on counterparty
 - **Backwards Compatibility**: Not required (development phase); assume all nodes are upgraded
 - **Migration Requirements**: None (non-production; no data migration planned)
 
@@ -338,12 +363,21 @@ WHERE trust_line_id = ?
   AND transaction_uuid IN (?, ?, ...)
 ```
 
+**New Query - Get Maximal Claim Block Number by Transaction UUID:**
+```sql
+SELECT maximal_claiming_block_number
+FROM payment_transactions
+WHERE uuid = ?
+```
+
 ### Integration Requirements
 
 #### Modified Integrations
 - **PaymentTransactionsHandler**: Query for transaction observing state
+- **PaymentTransactionsHandler**: Add method to load `maximal_claiming_block_number` by transaction UUID (for SubmitClaimVotes)
 - **OutgoingPaymentReceiptHandler/IncomingPaymentReceiptHandler**: New methods for finalized receipt selection and audit number updates
 - **BlockNumberCache/GetBlockNumberRpcRequest**: For current block number retrieval
+- **PaymentParticipantsVotesHandler**: Retrieve participant signatures for SubmitClaimVotes
 
 ### Key Files to Modify
 
@@ -351,10 +385,10 @@ WHERE trust_line_id = ?
 |------|---------|
 | `src/core/network/messages/trust_lines/AuditMessage.h/.cpp` | Add transaction UUID vector |
 | `src/core/network/messages/trust_lines/AuditResponseMessage.h/.cpp` | Add transaction UUID vector |
-| `src/core/transactions/transactions/trust_lines/AuditSourceTransaction.h/.cpp` | New steps, transaction filtering, response handling |
-| `src/core/transactions/transactions/trust_lines/AuditTargetTransaction.h/.cpp` | Transaction verification, desync handling |
-| `src/core/transactions/transactions/trust_lines/SetOutgoingTrustLineTransaction.cpp` | Same audit logic changes |
-| `src/core/transactions/transactions/trust_lines/CloseIncomingTrustLineTransaction.cpp` | Same audit logic changes |
+| `src/core/transactions/transactions/trust_lines/AuditSourceTransaction.h/.cpp` | New steps, transaction filtering, response handling, submit claim votes before completion |
+| `src/core/transactions/transactions/trust_lines/AuditTargetTransaction.h/.cpp` | Transaction verification, desync handling, submit claim votes before completion |
+| `src/core/transactions/transactions/trust_lines/SetOutgoingTrustLineTransaction.cpp` | Same audit logic changes, submit claim votes before completion |
+| `src/core/transactions/transactions/trust_lines/CloseIncomingTrustLineTransaction.cpp` | Same audit logic changes, submit claim votes before completion |
 | `src/core/io/storage/interfaces/OutgoingPaymentReceiptHandler.h` | New methods |
 | `src/core/io/storage/interfaces/IncomingPaymentReceiptHandler.h` | New methods |
 | `src/core/io/storage/sqlite/OutgoingPaymentReceiptHandler.h/.cpp` | Implement new methods |
@@ -362,6 +396,9 @@ WHERE trust_line_id = ?
 | `src/core/io/storage/postgresql/OutgoingPaymentReceiptHandler.h/.cpp` | Implement new methods |
 | `src/core/io/storage/postgresql/IncomingPaymentReceiptHandler.h/.cpp` | Implement new methods |
 | `src/core/crypto/keychain.h/.cpp` | Update saveOutgoingPaymentReceipt/saveIncomingPaymentReceipt calls |
+| `src/core/io/storage/interfaces/PaymentTransactionsHandler.h` | Add method for maximal claim block number lookup |
+| `src/core/io/storage/sqlite/PaymentTransactionsHandler.h/.cpp` | Implement maximal claim block number lookup |
+| `src/core/io/storage/postgresql/PaymentTransactionsHandler.h/.cpp` | Implement maximal claim block number lookup |
 | `src/core/trust_lines/manager/TrustLinesManager.h/.cpp` | Modify resetTrustLineTotalReceiptsAmounts or add new method |
 | Payment transaction files in `src/core/transactions/transactions/regular/payments/` | Pass auditNumber=0 when saving receipts |
 
@@ -372,7 +409,7 @@ WHERE trust_line_id = ?
 - **Key Deliverables**:
   - Week 1: Message modifications, receipt handler updates
   - Week 2: AuditSourceTransaction changes
-  - Week 3: AuditTargetTransaction changes, other audit transactions
+  - Week 3: AuditTargetTransaction changes, other audit transactions, claim vote submission
   - Week 4: Testing and validation
 
 ### Iteration Milestones
@@ -384,6 +421,7 @@ WHERE trust_line_id = ?
 | AuditSourceTransaction | Full implementation of initiator logic | Receipt handlers | High |
 | AuditTargetTransaction | Full implementation of contractor logic | Receipt handlers | High |
 | Other Audit Transactions | SetOutgoing, CloseIncoming updates | Source/Target complete | Medium |
+| Observer Vote Submission | SubmitClaimVotes before audit completion | Source/Target/Other complete | Medium |
 
 ## Risk Management
 
@@ -421,6 +459,7 @@ WHERE trust_line_id = ?
 7. **Retry limit**: Initiator receives `Audit_UpdateTransactionsList` twice -> sets TL to Conflict
 8. **Invalid update list**: Initiator receives `Audit_UpdateTransactionsList` with unknown UUIDs -> sets TL to Conflict
 9. **Block number failure**: GetBlockNumber RPC fails -> log and `resultDone()`
+10. **Asymmetric finalization**: One side finalized, other not -> audit succeeds with common set and SubmitClaimVotes RPCs are sent (fire-and-forget) before `trustLineActionSignal`
 
 ### Quality Gates
 - All new code has unit test coverage
@@ -510,6 +549,7 @@ WHERE trust_line_id = ?
 | Version | Date | Author | Changes | Iteration |
 |---------|------|--------|---------|-----------|
 | 1.0 | 2026-01-19 | AI Assistant | Initial draft | Phase 18 |
+| 1.1 | 2026-01-27 | AI Assistant | Add SubmitClaimVotes submission on audit completion | Phase 18 |
 
 **Related Documents**
 - **Previous PRD**: [PRD-17: Block Number Cache](17-block-number-cache.md)
